@@ -1,0 +1,18 @@
+{
+  "id": "philsms",
+  "name": "PhilSMS Messaging",
+  "description": "Send individual and selected-member SMS via PhilSMS",
+  "version": "1.0.0-rc1",
+  "author": "SDGTech Team of Soli Deo Gloria Christian Church–Davao City",
+  "type": "community",
+  "minimumCRMVersion": "7.0.0",
+  "mainClass": "ChurchCRM\\Plugins\\PhilSMS\\PhilSMSPlugin",
+  "dependencies": [],
+  "settingsUrl": "plugins/philsms/manage",
+  "routesFile": "routes/routes.php",
+  "settings": [],
+  "menuItems": [],
+  "hooks": [
+    "menu.building"
+  ]
+}
