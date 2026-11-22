@@ -195,11 +195,12 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
                                                 Save Draft
                                             </button>
                                             <button
-                                                type="button"
-                                                class="btn btn-outline-secondary btn-sm philsms-validate-draft"
-                                                data-queue-id="<?= (int) $notification['id'] ?>">
-                                                Validate Draft
-                                            </button>
+                                                 type="button"
+                                                 class="btn btn-outline-primary btn-sm philsms-review-deliver"
+                                                 data-queue-id="<?= (int) $notification['id'] ?>">
+                                                 <i class="fa fa-clipboard-check" aria-hidden="true"></i>
+                                                 Review &amp; Deliver
+                                             </button>
                                             <div class="small mt-1 philsms-draft-result"
                                                  role="status"
                                                  aria-live="polite"></div>
@@ -360,16 +361,62 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
     </p>
 </div>
 
+<!-- Approval notification review: staging dry-run only -->
+<div class="modal fade" id="philsms-notification-review-modal"
+     tabindex="-1" aria-labelledby="philsms-review-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="philsms-review-title">
+                    Review SMS Notification
+                </h5>
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Staging dry run.</strong>
+                    No SMS will be sent.
+                </div>
+                <div class="mb-3">
+                    <div class="small text-muted">Recipient</div>
+                    <div id="philsms-review-recipient" class="fw-bold"></div>
+                    <div id="philsms-review-phone" class="text-muted"></div>
+                </div>
+                <div class="small text-muted mb-1">SMS Message</div>
+                <div id="philsms-review-message"
+                     class="border rounded p-3"
+                     style="white-space: pre-wrap; overflow-wrap: anywhere;"></div>
+                <div id="philsms-review-feedback"
+                     class="small mt-3" role="status" aria-live="polite"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                        data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary"
+                        id="philsms-confirm-dry-run">
+                    Confirm Dry Run
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="<?= $base ?>/plugins/community/philsms/assets/js/sms-segments.js"></script>
 <script>
 (function () {
     'use strict';
 
-    // Track edits so in-flight responses cannot display stale feedback.
+    // Notification review workflow. Staging dry-run only.
     const draftRevisions = new WeakMap();
     const busyDraftRows = new WeakSet();
+    const unsavedDraftRows = new WeakSet();
+    const reviewedDraftRows = new WeakSet();
 
-    function setDraftRowBusy(row, busy) {
+    const notificationDryRunMode =
+        <?= $live ? 'false' : 'true' ?>;
+
+    function setNotificationBusy(row, busy) {
         if (busy) {
             busyDraftRows.add(row);
         } else {
@@ -377,48 +424,49 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
         }
 
         row.querySelectorAll(
-            '.philsms-save-draft, .philsms-validate-draft'
+            '.philsms-save-draft, .philsms-review-deliver'
         ).forEach(function (button) {
             button.disabled = busy;
         });
     }
 
-    // Invalidate displayed validation feedback when draft fields change.
+    function showNotificationResult(row, message, style) {
+        const result = row.querySelector('.philsms-draft-result');
+        if (!result) return;
+
+        result.textContent = message;
+        result.className =
+            'small mt-1 philsms-draft-result text-' + style;
+    }
+
     document.querySelectorAll(
         '.philsms-draft-recipient, .philsms-draft-message'
     ).forEach(function (field) {
         field.addEventListener('input', function () {
             const row = field.closest('tr');
-            const result = row
-                ? row.querySelector('.philsms-draft-result')
-                : null;
+            if (!row) return;
 
-            if (!result) {
-                return;
-            }
+            unsavedDraftRows.add(row);
+            reviewedDraftRows.delete(row);
 
             draftRevisions.set(
                 row,
                 (draftRevisions.get(row) || 0) + 1
             );
 
-            result.textContent =
-                'Draft changed. Save and validate again before delivery.';
-            result.className =
-                'small mt-1 philsms-draft-result text-warning';
+            showNotificationResult(
+                row,
+                'Draft changed. Save before reviewing for delivery.',
+                'warning'
+            );
         });
     });
 
-    // Update SMS usage estimates for each notification draft.
     document.querySelectorAll('.philsms-draft-message').forEach(function (field) {
         const row = field.closest('tr');
-        const display = row
-            ? row.querySelector('.philsms-draft-sms-usage')
-            : null;
+        const display = row?.querySelector('.philsms-draft-sms-usage');
 
-        if (!display) {
-            return;
-        }
+        if (!display) return;
 
         function updateSmsUsage() {
             if (!window.PhilSMSSegments) {
@@ -427,189 +475,301 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
             }
 
             const usage = window.PhilSMSSegments.calculate(field.value);
-
             display.replaceChildren();
 
-            const firstLine = document.createElement('div');
-            firstLine.textContent =
-                usage.characters + ' characters · ' +
-                usage.encoding;
+            const first = document.createElement('div');
+            first.textContent =
+                usage.characters + ' characters · ' + usage.encoding;
 
-            const secondLine = document.createElement('div');
-            secondLine.textContent =
-                usage.segments + ' SMS segment(s) · ' +
-                'Credits: ' + usage.estimatedCreditsPerRecipient +
-                ' credit(s)';
+            const second = document.createElement('div');
+            second.textContent =
+                usage.segments + ' SMS segment(s) · Credits: ' +
+                usage.estimatedCreditsPerRecipient + ' credit(s)';
 
-            display.append(firstLine, secondLine);
+            display.append(first, second);
         }
 
         field.addEventListener('input', updateSmsUsage);
         updateSmsUsage();
     });
 
-    // PhilSMS approval notification draft handlers.
+    async function notificationPost(endpoint, payload) {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            },
+            body: payload.toString()
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            throw new Error('Unexpected server response');
+        }
+
+        return {response, data: await response.json()};
+    }
+
+    const notificationCsrf = document.querySelector(
+        '#philsms-form input[name="csrf"]'
+    );
+
+    const notificationSaveUrl = <?= json_encode(
+        $base . '/plugins/philsms/notifications/save-draft',
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ) ?>;
+
+    const notificationPreviewUrl = <?= json_encode(
+        $base . '/plugins/philsms/notifications/dry-run',
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ) ?>;
+
     document.querySelectorAll('.philsms-save-draft').forEach(function (button) {
         button.addEventListener('click', async function () {
             const row = button.closest('tr');
+            if (!row || busyDraftRows.has(row)) return;
+
             const recipient = row.querySelector('.philsms-draft-recipient');
             const draft = row.querySelector('.philsms-draft-message');
-            const result = row.querySelector('.philsms-draft-result');
 
-            if (!recipient || !draft || !result ||
-                busyDraftRows.has(row)) {
+            if (!notificationCsrf || !recipient || !draft) {
+                showNotificationResult(
+                    row, 'Missing security token or draft fields.', 'danger'
+                );
                 return;
             }
 
             const message = draft.value.trim();
-            const messageLength = Array.from(message).length;
 
-            if (!recipient.value || !message || messageLength > 1000) {
-                result.textContent =
-                    'Select a recipient and enter a message of up to 1000 characters.';
-                result.className = 'small mt-1 philsms-draft-result text-danger';
+            if (!recipient.value || !message ||
+                Array.from(message).length > 1000) {
+                showNotificationResult(
+                    row,
+                    'Select a recipient and enter a message of up to 1000 characters.',
+                    'danger'
+                );
                 return;
             }
 
-            const csrf = document.querySelector(
-                '#philsms-form input[name="csrf"]'
-            );
-
-            if (!csrf) {
-                result.textContent = 'Security token unavailable. Refresh the page.';
-                result.className = 'small mt-1 philsms-draft-result text-danger';
-                return;
-            }
-
-            const payload = new URLSearchParams();
-            payload.set('csrf', csrf.value);
-            payload.set('queue_id', button.dataset.queueId);
-            payload.set('recipient_person_id', recipient.value);
-            payload.set('message', message);
-
-            const requestRevision = draftRevisions.get(row) || 0;
-
-            setDraftRowBusy(row, true);
-            result.textContent = 'Saving draft...';
-            result.className = 'small mt-1 philsms-draft-result text-muted';
+            const revision = draftRevisions.get(row) || 0;
+            unsavedDraftRows.add(row);
+            reviewedDraftRows.delete(row);
+            setNotificationBusy(row, true);
+            showNotificationResult(row, 'Saving draft...', 'muted');
 
             try {
-                const response = await fetch(
-                    <?= json_encode(
-                        $base . '/plugins/philsms/notifications/save-draft',
-                        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-                    ) ?>,
-                    {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'Accept': 'application/json'
-                        },
-                        body: payload.toString()
-                    }
+                const {response, data} = await notificationPost(
+                    notificationSaveUrl,
+                    new URLSearchParams({
+                        csrf: notificationCsrf.value,
+                        queue_id: button.dataset.queueId,
+                        recipient_person_id: recipient.value,
+                        message: message
+                    })
                 );
 
-                const data = await response.json();
+                if ((draftRevisions.get(row) || 0) !== revision) return;
 
-                if ((draftRevisions.get(row) || 0) !== requestRevision) {
-                    return;
+                if (response.ok && data.success === true) {
+                    unsavedDraftRows.delete(row);
+                    showNotificationResult(
+                        row, 'Draft saved. Ready for review.', 'success'
+                    );
+                } else {
+                    showNotificationResult(
+                        row, data.message || 'Unable to save draft.', 'danger'
+                    );
                 }
-
-                result.textContent = data.message ||
-                    'Unexpected server response.';
-
-                result.className = data.success
-                    ? 'small mt-1 philsms-draft-result text-success'
-                    : 'small mt-1 philsms-draft-result text-danger';
-
             } catch (error) {
-                if ((draftRevisions.get(row) || 0) !== requestRevision) {
-                    return;
-                }
-
-                result.textContent =
-                    'Unable to save draft. Check the connection and try again.';
-                result.className = 'small mt-1 philsms-draft-result text-danger';
+                showNotificationResult(
+                    row, 'Save outcome unknown. Refresh before continuing.',
+                    'warning'
+                );
             } finally {
-                setDraftRowBusy(row, false);
+                setNotificationBusy(row, false);
             }
         });
     });
 
-    // Validate the last saved notification draft. Never send SMS.
-    document.querySelectorAll('.philsms-validate-draft').forEach(function (button) {
+    const reviewModalElement = document.getElementById(
+        'philsms-notification-review-modal'
+    );
+    const confirmDryRunButton = document.getElementById(
+        'philsms-confirm-dry-run'
+    );
+
+    let pendingReview = null;
+
+    function closeReviewModal() {
+        if (window.bootstrap?.Modal && reviewModalElement) {
+            window.bootstrap.Modal.getOrCreateInstance(
+                reviewModalElement
+            ).hide();
+        }
+    }
+
+    reviewModalElement?.addEventListener('hidden.bs.modal', function () {
+        pendingReview = null;
+        if (confirmDryRunButton) {
+            confirmDryRunButton.disabled = false;
+        }
+    });
+
+    document.querySelectorAll('.philsms-review-deliver').forEach(function (button) {
         button.addEventListener('click', async function () {
             const row = button.closest('tr');
-            const result = row ? row.querySelector('.philsms-draft-result') : null;
 
-            if (!result || busyDraftRows.has(row)) {
+            if (!row || busyDraftRows.has(row) ||
+                unsavedDraftRows.has(row)) {
+                if (row && unsavedDraftRows.has(row)) {
+                    showNotificationResult(
+                        row, 'Save the current draft before reviewing.', 'warning'
+                    );
+                }
                 return;
             }
 
-            const csrf = document.querySelector(
-                '#philsms-form input[name="csrf"]'
+            if (!notificationDryRunMode) {
+                showNotificationResult(
+                    row, 'Staging dry-run interface is unavailable.', 'danger'
+                );
+                return;
+            }
+
+            if (!notificationCsrf || !reviewModalElement ||
+                !confirmDryRunButton || !window.bootstrap?.Modal) {
+                showNotificationResult(
+                    row, 'Review dialog unavailable. Refresh the page.', 'danger'
+                );
+                return;
+            }
+
+            const queueId = button.dataset.queueId;
+            const revision = draftRevisions.get(row) || 0;
+
+            setNotificationBusy(row, true);
+            showNotificationResult(
+                row, 'Validating saved notification...', 'muted'
             );
 
-            if (!csrf) {
-                result.textContent = 'Security token unavailable. Refresh the page.';
-                result.className = 'small mt-1 philsms-draft-result text-danger';
-                return;
-            }
-
-            const payload = new URLSearchParams();
-            payload.set('csrf', csrf.value);
-            payload.set('queue_id', button.dataset.queueId);
-
-            const requestRevision = draftRevisions.get(row) || 0;
-
-            setDraftRowBusy(row, true);
-            result.textContent = 'Validating last saved draft...';
-            result.className = 'small mt-1 philsms-draft-result text-muted';
-
             try {
-                const response = await fetch(
-                    <?= json_encode(
-                        $base . '/plugins/philsms/notifications/dry-run',
-                        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-                    ) ?>,
-                    {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'Accept': 'application/json'
-                        },
-                        body: payload.toString()
-                    }
+                const {response, data} = await notificationPost(
+                    notificationPreviewUrl,
+                    new URLSearchParams({
+                        csrf: notificationCsrf.value,
+                        queue_id: queueId
+                    })
                 );
 
-                const data = await response.json();
+                if ((draftRevisions.get(row) || 0) !== revision ||
+                    unsavedDraftRows.has(row)) return;
 
-                if ((draftRevisions.get(row) || 0) !== requestRevision) {
+                if (!response.ok || data.success !== true ||
+                    data.dry_run !== true || !data.preview) {
+                    showNotificationResult(
+                        row,
+                        data.message || 'Unable to validate notification.',
+                        'warning'
+                    );
                     return;
                 }
 
-                result.textContent = data.success && data.dry_run === true
-                    ? 'Last saved draft validated. No SMS was sent.'
-                    : (data.message || 'Unable to validate saved draft.');
+                const preview = data.preview;
 
-                result.className = data.success && data.dry_run === true
-                    ? 'small mt-1 philsms-draft-result text-success'
-                    : 'small mt-1 philsms-draft-result text-danger';
+                if (typeof preview.recipient_name !== 'string' ||
+                    typeof preview.recipient_phone !== 'string' ||
+                    typeof preview.message !== 'string') {
+                    throw new Error('Incomplete preview');
+                }
 
+                document.getElementById(
+                    'philsms-review-recipient'
+                ).textContent = preview.recipient_name;
+
+                document.getElementById(
+                    'philsms-review-phone'
+                ).textContent = preview.recipient_phone;
+
+                document.getElementById(
+                    'philsms-review-message'
+                ).textContent = preview.message;
+
+                document.getElementById(
+                    'philsms-review-feedback'
+                ).textContent = '';
+
+                pendingReview = {row, queueId, revision};
+
+                window.bootstrap.Modal.getOrCreateInstance(
+                    reviewModalElement
+                ).show();
+
+                showNotificationResult(
+                    row, 'Saved draft validated for review.', 'success'
+                );
             } catch (error) {
-                if ((draftRevisions.get(row) || 0) !== requestRevision) {
-                    return;
-                }
-
-                result.textContent =
-                    'Validation request failed. Check the connection and try again.';
-                result.className = 'small mt-1 philsms-draft-result text-danger';
+                showNotificationResult(
+                    row, 'Unable to validate saved notification.', 'danger'
+                );
             } finally {
-                setDraftRowBusy(row, false);
+                setNotificationBusy(row, false);
             }
         });
+    });
+
+    confirmDryRunButton?.addEventListener('click', async function () {
+        const review = pendingReview;
+
+        if (!review || confirmDryRunButton.disabled) return;
+
+        const {row, queueId, revision} = review;
+
+        if (busyDraftRows.has(row) ||
+            unsavedDraftRows.has(row) ||
+            (draftRevisions.get(row) || 0) !== revision) {
+            document.getElementById(
+                'philsms-review-feedback'
+            ).textContent = 'Draft changed. Close and review again.';
+            return;
+        }
+
+        confirmDryRunButton.disabled = true;
+        setNotificationBusy(row, true);
+
+        try {
+            // Validate again. Never call the live delivery endpoint.
+            const {response, data} = await notificationPost(
+                notificationPreviewUrl,
+                new URLSearchParams({
+                    csrf: notificationCsrf.value,
+                    queue_id: queueId
+                })
+            );
+
+            if (!response.ok || data.success !== true ||
+                data.dry_run !== true) {
+                throw new Error('Validation failed');
+            }
+
+            showNotificationResult(
+                row,
+                'Dry run completed successfully. No SMS was sent.',
+                'success'
+            );
+
+            pendingReview = null;
+            closeReviewModal();
+        } catch (error) {
+            document.getElementById(
+                'philsms-review-feedback'
+            ).textContent =
+                'Dry-run validation failed. No delivery was requested.';
+        } finally {
+            confirmDryRunButton.disabled = false;
+            setNotificationBusy(row, false);
+        }
     });
 
     const form = document.getElementById('philsms-form');

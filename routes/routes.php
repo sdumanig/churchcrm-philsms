@@ -295,6 +295,11 @@ $app->post('/philsms/notifications/dry-run', function (
             'success' => true,
             'dry_run' => true,
             'queue_id' => $queueId,
+            'preview' => [
+                'recipient_name' => $preview['recipient_name'],
+                'recipient_phone' => $preview['recipient_phone'],
+                'message' => $preview['message'],
+            ],
             'message' => 'Notification validated successfully. No SMS was sent.'
         ]);
     } catch (\InvalidArgumentException $e) {
