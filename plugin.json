@@ -1,18 +1,43 @@
 {
-  "id": "philsms",
-  "name": "PhilSMS Messaging",
-  "description": "Send individual and selected-member SMS via PhilSMS",
-  "version": "1.0.0-rc1",
-  "author": "SDGTech Team of Soli Deo Gloria Christian Church–Davao City",
-  "type": "community",
-  "minimumCRMVersion": "7.0.0",
-  "mainClass": "ChurchCRM\\Plugins\\PhilSMS\\PhilSMSPlugin",
-  "dependencies": [],
-  "settingsUrl": "plugins/philsms/manage",
-  "routesFile": "routes/routes.php",
-  "settings": [],
-  "menuItems": [],
-  "hooks": [
-    "menu.building"
-  ]
+    "id": "philsms",
+    "name": "PhilSMS Messaging",
+    "description": "Send individual and selected-member SMS via PhilSMS",
+    "version": "1.0.0-rc1",
+    "author": "SDGTech Team of Soli Deo Gloria Christian Church–Davao City",
+    "type": "community",
+    "minimumCRMVersion": "7.0.0",
+    "mainClass": "ChurchCRM\\Plugins\\PhilSMS\\PhilSMSPlugin",
+    "dependencies": [],
+    "settingsUrl": "plugins/philsms/manage",
+    "routesFile": "routes/routes.php",
+    "settings": [
+        {
+            "key": "apiKey",
+            "label": "PhilSMS API Key",
+            "type": "password",
+            "required": true,
+            "help": "Enter your PhilSMS API key. Leave blank to keep the existing key."
+        },
+        {
+            "key": "senderId",
+            "label": "Sender ID",
+            "type": "text",
+            "required": true,
+            "help": "Enter your registered PhilSMS Sender ID, such as SDG Connect."
+        },
+        {
+            "key": "liveSending",
+            "label": "Enable Live SMS Sending",
+            "type": "boolean",
+            "required": false,
+            "help": "Allow actual SMS sending only when the server administrator also sets PHILSMS_LIVE_SEND=1. Otherwise, messages remain in dry-run mode."
+        }
+    ],
+    "menuItems": [],
+    "hooks": [
+        "menu.building",
+        "person.updated",
+        "family.updated"
+    ],
+    "hasTest": true
 }

@@ -2,7 +2,18 @@
 namespace ChurchCRM\Plugins\PhilSMS;
 final class PhilSMSClient {
  private string $token;
- public function __construct(string $token) { if ($token==='') throw new \RuntimeException('PhilSMS token not configured'); $this->token=$token; }
+ private string $senderId;
+
+ public function __construct(string $token, ?string $senderId = null) {
+  if ($token === '') {
+   throw new \RuntimeException('PhilSMS token not configured');
+  }
+
+  $this->token = $token;
+  $this->senderId = trim(
+   $senderId ?? (string) getenv('PHILSMS_SENDER_ID')
+  );
+ }
  public static function normalize(string $number): ?string {
   $n=preg_replace('/[^0-9+]/','',$number);
   if (str_starts_with($n,'+')) $n=substr($n,1);
@@ -39,7 +50,7 @@ final class PhilSMSClient {
         );
     }
 
-    $sender = trim((string) getenv('PHILSMS_SENDER_ID'));
+    $sender = $this->senderId;
 
     if ($sender === '' || strlen($sender) > 11) {
         throw new \RuntimeException(
