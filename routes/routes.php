@@ -2,6 +2,7 @@
 use ChurchCRM\Plugins\PhilSMS\PhilSMSPlugin;
 use ChurchCRM\Plugins\PhilSMS\PhilSMSClient;
 use ChurchCRM\Plugins\PhilSMS\NotificationQueue;
+use ChurchCRM\Plugins\PhilSMS\NotificationDeliveryService;
 use ChurchCRM\model\ChurchCRM\PersonQuery;
 use ChurchCRM\Slim\Middleware\Request\Auth\AdminRoleAuthMiddleware;
 use ChurchCRM\dto\SystemURLs;
@@ -321,7 +322,7 @@ $app->post('/philsms/notifications/dry-run', function (
 $app->post('/philsms/notifications/deliver', function (
     Request $request,
     Response $response
-): Response {
+) use ($plugin): Response {
     $data = (array) $request->getParsedBody();
 
     $json = static function (
@@ -374,11 +375,74 @@ $app->post('/philsms/notifications/deliver', function (
             ]);
         }
 
+        if (!$plugin->isLiveSendingEnabled()) {
+            return $json(200, [
+                'success' => true,
+                'dry_run' => true,
+                'queue_id' => $queueId,
+                'message' => 'Delivery authorization validated. No SMS was sent.'
+            ]);
+        }
+
+        $client = new PhilSMSClient(
+            $plugin->getApiToken(),
+            $plugin->getSenderId()
+        );
+
+        $result = NotificationDeliveryService::deliver(
+            $queueId,
+            $client,
+            $plugin,
+            true
+        );
+
+        $status = $result['status'];
+
+        if ($status === 'not_pending') {
+            return $json(409, [
+                'success' => false,
+                'dry_run' => false,
+                'queue_id' => $queueId,
+                'status' => $status,
+                'message' => 'Notification is no longer pending.'
+            ]);
+        }
+
+        if ($status === 'uncertain') {
+            return $json(202, [
+                'success' => false,
+                'dry_run' => false,
+                'queue_id' => $queueId,
+                'status' => $status,
+                'message' => 'SMS submission outcome is uncertain. '
+                    . 'Review the notification before taking further action.'
+            ]);
+        }
+
+        if ($status === 'failed') {
+            return $json(200, [
+                'success' => false,
+                'dry_run' => false,
+                'queue_id' => $queueId,
+                'status' => $status,
+                'message' => 'SMS submission failed. '
+                    . 'Review the notification before taking further action.'
+            ]);
+        }
+
+        if ($status !== 'sent') {
+            throw new \RuntimeException(
+                'Unexpected notification delivery status.'
+            );
+        }
+
         return $json(200, [
             'success' => true,
-            'dry_run' => true,
+            'dry_run' => false,
             'queue_id' => $queueId,
-            'message' => 'Delivery authorization validated. No SMS was sent.'
+            'status' => 'sent',
+            'message' => 'PhilSMS accepted the SMS submission. '
+                . 'Handset delivery is not confirmed.'
         ]);
     } catch (\InvalidArgumentException $e) {
         return $json(422, [
