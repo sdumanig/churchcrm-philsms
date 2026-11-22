@@ -46,20 +46,41 @@ $app->get('/philsms/manage', function(
         $balance = $client->balance();
 
         if (($balance['status'] ?? '') !== 'success') {
-            throw new \RuntimeException(
-                (string) ($balance['message'] ?? 'Balance lookup failed')
+            $providerMessage = strtolower(
+                (string) ($balance['message'] ?? '')
             );
+
+            if (str_contains($providerMessage, 'unauthenticated')
+                || str_contains($providerMessage, 'unauthorized')
+                || str_contains($providerMessage, 'invalid token')) {
+                $creditsError = 'PhilSMS API authentication failed. '
+                    . 'The saved API key may be invalid or expired. '
+                    . 'Please verify and update your API key in Plugin Management. '
+                    . 'Tip: Copying and pasting API keys can introduce extra '
+                    . 'spaces, tabs, or line breaks. Make sure the complete '
+                    . 'key is copied without extra characters.';
+            } else {
+                $creditsError = 'PhilSMS balance lookup failed. '
+                    . 'Please try again later.';
+            }
         }
 
-        $credits = $balance['data']['remaining_balance'] ?? null;
+        if ($creditsError === null) {
+            $credits = $balance['data']['remaining_balance'] ?? null;
 
-        if (!is_string($credits) || $credits === '') {
-            throw new \RuntimeException('Balance unavailable');
+            if (!is_scalar($credits) || (string) $credits === '') {
+                throw new \RuntimeException('Balance unavailable');
+            }
+
+            $credits = (string) $credits;
         }
 
     } catch (\Throwable $e) {
-        error_log('PhilSMS balance lookup failed: ' . $e->getMessage());
-        $creditsError = 'Balance temporarily unavailable';
+        error_log(
+            '[PhilSMS] Balance lookup failed: ' . get_class($e)
+        );
+        $creditsError = 'PhilSMS balance temporarily unavailable. '
+            . 'Please check your connection or try again later.';
     }
 
     // Read-only approval notification queue.

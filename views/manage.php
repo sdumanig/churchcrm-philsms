@@ -41,13 +41,32 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
                 ) ?>
             </span>
         <?php else: ?>
-            <span class="text-muted">
-                <?= htmlspecialchars(
-                    $creditsError ?? 'Unavailable',
-                    ENT_QUOTES,
-                    'UTF-8'
-                ) ?>
-            </span>
+            <?php
+            $authenticationFailed = str_starts_with(
+                (string) $creditsError,
+                'PhilSMS API authentication failed.'
+            );
+            ?>
+            <?php if ($authenticationFailed): ?>
+                <div class="alert alert-warning mt-2 mb-0" role="alert">
+                    <strong>API Authentication Failed</strong>
+                    <p class="mb-0">
+                        <?= htmlspecialchars(
+                            $creditsError,
+                            ENT_QUOTES,
+                            'UTF-8'
+                        ) ?>
+                    </p>
+                </div>
+            <?php else: ?>
+                <span class="text-muted">
+                    <?= htmlspecialchars(
+                        $creditsError ?? 'Unavailable',
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ) ?>
+                </span>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 
