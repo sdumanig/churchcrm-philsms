@@ -9,11 +9,6 @@ final class NotificationQueue
     private const MIGRATION_FILE = __DIR__ . '/../migrations/001_notification_queue.sql';
 
     /**
-     * Initialize the plugin-owned notification queue.
-     * Existing records are preserved.
-     */
-
-    /**
      * Queue an approval notification without sending an SMS.
      *
      * Returns true when inserted, false when already queued.
@@ -232,7 +227,7 @@ final class NotificationQueue
      * Does not contact the SMS provider.
      * A processing notification must never be automatically reclaimed.
      */
-    public static function claimForDelivery(int $queueId): bool
+    public static function claimForDeliveryPayload(int $queueId): ?array
     {
         if ($queueId <= 0) {
             throw new \InvalidArgumentException(
@@ -257,7 +252,7 @@ final class NotificationQueue
 
             if (!$notification || $notification['status'] !== 'pending') {
                 $connection->rollBack();
-                return false;
+                return null;
             }
 
             $phone = PhilSMSClient::normalize(
@@ -320,7 +315,11 @@ final class NotificationQueue
             }
 
             $connection->commit();
-            return true;
+
+            return [
+                'recipient_phone' => $phone,
+                'message' => $message
+            ];
         } catch (\Throwable $e) {
             if ($connection->inTransaction()) {
                 $connection->rollBack();
@@ -331,11 +330,13 @@ final class NotificationQueue
     }
 
     /**
-     * Record the outcome of a claimed notification.
-     *
-     * Does not contact the SMS provider.
-     * Terminal states cannot be finalized again.
+     * Compatibility wrapper for existing callers.
      */
+    public static function claimForDelivery(int $queueId): bool
+    {
+        return self::claimForDeliveryPayload($queueId) !== null;
+    }
+
     /**
      * Retrieve a validated notification preview without sending SMS.
      *

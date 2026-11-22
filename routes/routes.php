@@ -313,6 +313,91 @@ $app->post('/philsms/notifications/dry-run', function (
     }
 })->add(AdminRoleAuthMiddleware::class);
 
+/**
+ * Approval notification delivery authorization.
+ *
+ * Dry-run only. Does not claim notifications or contact PhilSMS.
+ */
+$app->post('/philsms/notifications/deliver', function (
+    Request $request,
+    Response $response
+): Response {
+    $data = (array) $request->getParsedBody();
+
+    $json = static function (
+        int $status,
+        array $payload
+    ) use ($response): Response {
+        $response->getBody()->write(json_encode(
+            $payload,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        ));
+
+        return $response
+            ->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8')
+            ->withHeader('Cache-Control', 'no-store');
+    };
+
+    if (session_status() !== PHP_SESSION_ACTIVE ||
+        !isset($_SESSION['philsms_csrf']) ||
+        !hash_equals(
+            (string) $_SESSION['philsms_csrf'],
+            (string) ($data['csrf'] ?? '')
+        )) {
+        return $json(403, [
+            'success' => false,
+            'message' => 'Invalid or expired security token.'
+        ]);
+    }
+
+    $queueId = filter_var(
+        $data['queue_id'] ?? null,
+        FILTER_VALIDATE_INT,
+        ['options' => ['min_range' => 1]]
+    );
+
+    if ($queueId === false || $queueId === null) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'Invalid notification queue ID.'
+        ]);
+    }
+
+    try {
+        $preview = NotificationQueue::getDeliveryPreview($queueId);
+
+        if ($preview === null) {
+            return $json(409, [
+                'success' => false,
+                'message' => 'Notification is not pending or does not exist.'
+            ]);
+        }
+
+        return $json(200, [
+            'success' => true,
+            'dry_run' => true,
+            'queue_id' => $queueId,
+            'message' => 'Delivery authorization validated. No SMS was sent.'
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'Notification recipient or message requires review.'
+        ]);
+    } catch (\Throwable $e) {
+        error_log(
+            '[PhilSMS] Notification delivery validation failed: ' .
+            get_class($e)
+        );
+
+        return $json(500, [
+            'success' => false,
+            'message' => 'Unable to validate notification delivery.'
+        ]);
+    }
+})->add(AdminRoleAuthMiddleware::class);
+
 $app->post('/philsms/send', function (Request $request, Response $response) use ($plugin): Response {
     $data = (array) $request->getParsedBody();
 
