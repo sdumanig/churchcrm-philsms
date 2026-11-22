@@ -33,11 +33,19 @@ final class NotificationDeliveryService
         int $queueId,
         PhilSMSClient $client,
         PhilSMSPlugin $plugin,
-        bool $authorized = false
+        bool $authorized = false,
+        ?string $expectedFingerprint = null
     ): array {
         if (!$authorized) {
             throw new \LogicException(
                 'Notification delivery has not been authorized.'
+            );
+        }
+
+        if ($expectedFingerprint === null ||
+            preg_match('/\A[a-f0-9]{64}\z/D', $expectedFingerprint) !== 1) {
+            throw new \LogicException(
+                'A valid reviewed notification fingerprint is required.'
             );
         }
 
@@ -62,7 +70,8 @@ final class NotificationDeliveryService
         return self::processClaimedDelivery(
             $queueId,
             static fn(string $phone, string $message): array =>
-                $client->send($phone, $message)
+                $client->send($phone, $message),
+            $expectedFingerprint
         );
 
     }
@@ -73,15 +82,19 @@ final class NotificationDeliveryService
      * Call only after the public delivery authorization checks.
      * The provider callback permits isolated, network-free testing.
      */
-    private static function processClaimedDelivery(
-        int $queueId,
-        callable $submit
-    ): array {
+     private static function processClaimedDelivery(
+    int $queueId,
+    callable $submit,
+    string $expectedFingerprint
+): array {
         /*
          * Claim and retrieve the validated payload atomically.
          * Never submit a previously fetched preview.
          */
-        $claimed = NotificationQueue::claimForDeliveryPayload($queueId);
+        $claimed = NotificationQueue::claimForDeliveryPayload(
+            $queueId,
+            $expectedFingerprint
+        );
 
         if ($claimed === null) {
             return [

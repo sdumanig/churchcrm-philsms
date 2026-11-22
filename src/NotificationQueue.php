@@ -248,15 +248,21 @@ final class NotificationQueue
      * A processing notification must never be automatically reclaimed.
      */
     public static function claimForDeliveryPayload(
-        int $queueId,
-        ?string $expectedFingerprint = null
-    ): ?array
+    int $queueId,
+    string $expectedFingerprint
+): ?array
     {
         if ($queueId <= 0) {
             throw new \InvalidArgumentException(
                 'Invalid notification queue ID.'
             );
         }
+
+if (!preg_match('/\A[a-f0-9]{64}\z/D', $expectedFingerprint)) {
+    throw new \InvalidArgumentException(
+        'Invalid reviewed notification fingerprint.'
+    );
+}
 
         $connection = Propel::getWriteConnection('default');
         $connection->beginTransaction();
@@ -293,23 +299,23 @@ final class NotificationQueue
                 );
             }
 
-            if ($expectedFingerprint !== null) {
-                $actualFingerprint = self::deliveryFingerprint(
-                    $queueId,
-                    (string) $notification['recipient_name'],
-                    $phone,
-                    $message
-                );
+// Verify that the notification still matches the exact
+// recipient and message reviewed by the administrator.
+$actualFingerprint = self::deliveryFingerprint(
+    $queueId,
+    (string) ($notification['recipient_name'] ?? ''),
+    $phone,
+    $message
+);
 
-                if (!hash_equals(
-                    $expectedFingerprint,
-                    $actualFingerprint
-                )) {
-                    throw new \InvalidArgumentException(
-                        'Notification changed since review. Review again.'
-                    );
-                }
-            }
+if (!hash_equals(
+    $expectedFingerprint,
+    $actualFingerprint
+)) {
+    throw new \InvalidArgumentException(
+        'Notification changed since review. Review again.'
+    );
+}
 
             $candidates = self::getRecipientCandidates(
                 (string) $notification['event_type'],
@@ -373,10 +379,6 @@ final class NotificationQueue
     /**
      * Compatibility wrapper for existing callers.
      */
-    public static function claimForDelivery(int $queueId): bool
-    {
-        return self::claimForDeliveryPayload($queueId) !== null;
-    }
 
     /**
      * Retrieve a validated notification preview without sending SMS.

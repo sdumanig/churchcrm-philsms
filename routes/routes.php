@@ -3,6 +3,8 @@ use ChurchCRM\Plugins\PhilSMS\PhilSMSPlugin;
 use ChurchCRM\Plugins\PhilSMS\PhilSMSClient;
 use ChurchCRM\Plugins\PhilSMS\NotificationQueue;
 use ChurchCRM\Plugins\PhilSMS\NotificationDeliveryService;
+use ChurchCRM\Plugins\PhilSMS\NotificationConfirmation;
+use ChurchCRM\Plugins\PhilSMS\LiveDeliveryAuthorization;
 use ChurchCRM\model\ChurchCRM\PersonQuery;
 use ChurchCRM\Slim\Middleware\Request\Auth\AdminRoleAuthMiddleware;
 use ChurchCRM\dto\SystemURLs;
@@ -211,6 +213,8 @@ $app->post('/philsms/notifications/save-draft', function (
             ]);
         }
 
+        NotificationConfirmation::invalidate();
+
         return $json(200, [
             'success' => true,
             'message' => 'Notification draft saved. No SMS was sent.'
@@ -283,6 +287,8 @@ $app->post('/philsms/notifications/dry-run', function (
     }
 
     try {
+        NotificationConfirmation::invalidate();
+
         $preview = NotificationQueue::getDeliveryPreview($queueId);
 
         if ($preview === null) {
@@ -321,9 +327,114 @@ $app->post('/philsms/notifications/dry-run', function (
 })->add(AdminRoleAuthMiddleware::class);
 
 /**
+ * Review the exact saved SMS and issue a session-bound delivery confirmation.
+ *
+ * This endpoint never claims a notification or contacts the SMS provider.
+ */
+$app->post('/philsms/notifications/review-delivery', function (
+    Request $request,
+    Response $response
+): Response {
+    $data = (array) $request->getParsedBody();
+
+    $json = static function (
+        int $status,
+        array $payload
+    ) use ($response): Response {
+        $response->getBody()->write(json_encode(
+            $payload,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        ));
+
+        return $response
+            ->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8')
+            ->withHeader('Cache-Control', 'no-store');
+    };
+
+    if (session_status() !== PHP_SESSION_ACTIVE ||
+        !isset($_SESSION['philsms_csrf']) ||
+        !hash_equals(
+            (string) $_SESSION['philsms_csrf'],
+            (string) ($data['csrf'] ?? '')
+        )) {
+        return $json(403, [
+            'success' => false,
+            'message' => 'Invalid or expired security token.'
+        ]);
+    }
+
+    $queueId = filter_var(
+        $data['queue_id'] ?? null,
+        FILTER_VALIDATE_INT,
+        ['options' => ['min_range' => 1]]
+    );
+
+    if ($queueId === false) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'Invalid notification queue ID.'
+        ]);
+    }
+
+    try {
+        NotificationConfirmation::invalidate();
+
+        $preview = NotificationQueue::getDeliveryPreview($queueId);
+
+        if ($preview === null) {
+            return $json(409, [
+                'success' => false,
+                'message' => 'Notification is not pending or does not exist.'
+            ]);
+        }
+
+        $fingerprint = NotificationQueue::deliveryFingerprint(
+            $queueId,
+            $preview['recipient_name'],
+            $preview['recipient_phone'],
+            $preview['message']
+        );
+
+        $confirmationToken = NotificationConfirmation::issue(
+            $queueId,
+            $fingerprint
+        );
+
+        return $json(200, [
+            'success' => true,
+            'review_only' => true,
+            'queue_id' => $queueId,
+            'confirmation_token' => $confirmationToken,
+            'preview' => [
+                'recipient_name' => $preview['recipient_name'],
+                'recipient_phone' => $preview['recipient_phone'],
+                'message' => $preview['message'],
+            ],
+            'message' => 'Notification ready for administrator confirmation. No SMS was sent.'
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'Notification recipient or message requires review.'
+        ]);
+    } catch (\Throwable $e) {
+        error_log(
+            '[PhilSMS] Delivery review failed: ' . get_class($e)
+        );
+
+        return $json(500, [
+            'success' => false,
+            'message' => 'Unable to validate notification.'
+        ]);
+    }
+})->add(AdminRoleAuthMiddleware::class);
+
+/**
  * Approval notification delivery authorization.
  *
- * Dry-run only. Does not claim notifications or contact PhilSMS.
+ * Requires a single-use confirmation bound to the reviewed SMS payload.
+ * Live delivery remains subject to both server and plugin safeguards.
  */
 $app->post('/philsms/notifications/deliver', function (
     Request $request,
@@ -371,22 +482,52 @@ $app->post('/philsms/notifications/deliver', function (
         ]);
     }
 
+    $confirmationToken = $data['confirmation_token'] ?? null;
+
+    if (!is_string($confirmationToken)) {
+        NotificationConfirmation::invalidate();
+
+        return $json(403, [
+            'success' => false,
+            'message' => 'Notification confirmation is required. Review again.'
+        ]);
+    }
+
+    $expectedFingerprint = NotificationConfirmation::consume(
+        $queueId,
+        $confirmationToken
+    );
+
+    if ($expectedFingerprint === null) {
+        return $json(403, [
+            'success' => false,
+            'message' => 'Notification confirmation expired or is invalid. Review again.'
+        ]);
+    }
+
     try {
-        $preview = NotificationQueue::getDeliveryPreview($queueId);
-
-        if ($preview === null) {
-            return $json(409, [
-                'success' => false,
-                'message' => 'Notification is not pending or does not exist.'
-            ]);
-        }
-
         if (!$plugin->isLiveSendingEnabled()) {
             return $json(200, [
                 'success' => true,
                 'dry_run' => true,
                 'queue_id' => $queueId,
                 'message' => 'Delivery authorization validated. No SMS was sent.'
+            ]);
+        }
+
+        // Require explicit live-delivery authorization before
+        // initializing the provider client.
+        if (
+            !LiveDeliveryAuthorization::isAuthorized(
+                $plugin->isLiveSendingEnabled(),
+                $data['live_authorization'] ?? null
+            )
+        ) {
+            NotificationConfirmation::invalidate();
+
+            return $json(403, [
+                'success' => false,
+                'message' => 'Explicit live delivery authorization is required.'
             ]);
         }
 
@@ -399,7 +540,8 @@ $app->post('/philsms/notifications/deliver', function (
             $queueId,
             $client,
             $plugin,
-            true
+            true,
+            $expectedFingerprint
         );
 
         $status = $result['status'];

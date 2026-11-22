@@ -376,9 +376,10 @@ $live = ($liveSendingEnabled === true);
             <div class="modal-body">
                 <div class="alert alert-info">
                     <?php if ($live): ?>
-                        <strong>LIVE SMS DELIVERY.</strong>
-                        Sending will consume SMS credits.
-                        Live confirmation is not yet enabled.
+                       <strong>LIVE SMS DELIVERY.</strong>
+Review the recipient and message carefully.
+Sending will consume SMS credits.
+Explicit authorization is required.
                     <?php else: ?>
                         <strong>Dry run.</strong>
                         No SMS will be sent.
@@ -393,6 +394,19 @@ $live = ($liveSendingEnabled === true);
                 <div id="philsms-review-message"
                      class="border rounded p-3"
                      style="white-space: pre-wrap; overflow-wrap: anywhere;"></div>
+                <?php if ($live): ?>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="philsms-live-confirmation">
+                        <label class="form-check-label"
+                               for="philsms-live-confirmation">
+                            I have reviewed the recipient and message.
+                            I authorize sending this SMS.
+                        </label>
+                    </div>
+                <?php endif; ?>
+
                 <div id="philsms-review-feedback"
                      class="small mt-3" role="status" aria-live="polite"></div>
             </div>
@@ -400,8 +414,7 @@ $live = ($liveSendingEnabled === true);
                 <button type="button" class="btn btn-secondary"
                         data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary"
-                        id="philsms-confirm-dry-run"
-                        <?= $live ? 'disabled' : '' ?>>
+                        id="philsms-confirm-dry-run">
                     <?= $live ? 'Confirm &amp; Send SMS' : 'Confirm Dry Run' ?>
                 </button>
             </div>
@@ -420,8 +433,8 @@ $live = ($liveSendingEnabled === true);
     const unsavedDraftRows = new WeakSet();
     const reviewedDraftRows = new WeakSet();
 
-    const notificationDryRunMode =
-        <?= $live ? 'false' : 'true' ?>;
+    const notificationLiveMode =
+        <?= $live ? 'true' : 'false' ?>;
 
     function setNotificationBusy(row, busy) {
         if (busy) {
@@ -528,8 +541,13 @@ $live = ($liveSendingEnabled === true);
         JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
     ) ?>;
 
-    const notificationPreviewUrl = <?= json_encode(
-        $base . '/plugins/philsms/notifications/dry-run',
+    const notificationReviewUrl = <?= json_encode(
+        $base . '/plugins/philsms/notifications/review-delivery',
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ) ?>;
+
+    const notificationDeliverUrl = <?= json_encode(
+        $base . '/plugins/philsms/notifications/deliver',
         JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
     ) ?>;
 
@@ -538,6 +556,7 @@ $live = ($liveSendingEnabled === true);
             const row = button.closest('tr');
             if (!row || busyDraftRows.has(row)) return;
 
+            const queueId = button.dataset.queueId;
             const recipient = row.querySelector('.philsms-draft-recipient');
             const draft = row.querySelector('.philsms-draft-message');
 
@@ -571,7 +590,7 @@ $live = ($liveSendingEnabled === true);
                     notificationSaveUrl,
                     new URLSearchParams({
                         csrf: notificationCsrf.value,
-                        queue_id: button.dataset.queueId,
+                        queue_id: queueId,
                         recipient_person_id: recipient.value,
                         message: message
                     })
@@ -606,6 +625,25 @@ $live = ($liveSendingEnabled === true);
     const confirmDryRunButton = document.getElementById(
         'philsms-confirm-dry-run'
     );
+    const liveConfirmationCheckbox = document.getElementById(
+        'philsms-live-confirmation'
+    );
+
+function updateConfirmationButtonState() {
+    if (!confirmDryRunButton) return;
+
+    confirmDryRunButton.disabled =
+        notificationLiveMode &&
+        (!liveConfirmationCheckbox ||
+         !liveConfirmationCheckbox.checked);
+}
+
+liveConfirmationCheckbox?.addEventListener(
+    'change',
+    updateConfirmationButtonState
+);
+
+updateConfirmationButtonState();
 
     let pendingReview = null;
 
@@ -619,9 +657,12 @@ $live = ($liveSendingEnabled === true);
 
     reviewModalElement?.addEventListener('hidden.bs.modal', function () {
         pendingReview = null;
-        if (confirmDryRunButton) {
-            confirmDryRunButton.disabled = false;
+
+        if (liveConfirmationCheckbox) {
+            liveConfirmationCheckbox.checked = false;
         }
+
+        updateConfirmationButtonState();
     });
 
     document.querySelectorAll('.philsms-review-deliver').forEach(function (button) {
@@ -635,13 +676,6 @@ $live = ($liveSendingEnabled === true);
                         row, 'Save the current draft before reviewing.', 'warning'
                     );
                 }
-                return;
-            }
-
-            if (!notificationDryRunMode) {
-                showNotificationResult(
-                    row, 'Staging dry-run interface is unavailable.', 'danger'
-                );
                 return;
             }
 
@@ -663,7 +697,7 @@ $live = ($liveSendingEnabled === true);
 
             try {
                 const {response, data} = await notificationPost(
-                    notificationPreviewUrl,
+                    notificationReviewUrl,
                     new URLSearchParams({
                         csrf: notificationCsrf.value,
                         queue_id: queueId
@@ -674,7 +708,10 @@ $live = ($liveSendingEnabled === true);
                     unsavedDraftRows.has(row)) return;
 
                 if (!response.ok || data.success !== true ||
-                    data.dry_run !== true || !data.preview) {
+                    data.review_only !== true || !data.preview ||
+                    String(data.queue_id) !== String(queueId) ||
+                    typeof data.confirmation_token !== 'string' ||
+                    !/^[a-f0-9]{64}$/.test(data.confirmation_token)) {
                     showNotificationResult(
                         row,
                         data.message || 'Unable to validate notification.',
@@ -707,7 +744,18 @@ $live = ($liveSendingEnabled === true);
                     'philsms-review-feedback'
                 ).textContent = '';
 
-                pendingReview = {row, queueId, revision};
+                pendingReview = {
+                    row,
+                    queueId,
+                    revision,
+                    confirmationToken: data.confirmation_token
+                };
+
+                if (liveConfirmationCheckbox) {
+                    liveConfirmationCheckbox.checked = false;
+                }
+
+                updateConfirmationButtonState();
 
                 window.bootstrap.Modal.getOrCreateInstance(
                     reviewModalElement
@@ -731,7 +779,22 @@ $live = ($liveSendingEnabled === true);
 
         if (!review || confirmDryRunButton.disabled) return;
 
-        const {row, queueId, revision} = review;
+        const {
+            row,
+            queueId,
+            revision,
+            confirmationToken
+        } = review;
+
+        if (notificationLiveMode &&
+            (!liveConfirmationCheckbox ||
+             !liveConfirmationCheckbox.checked)) {
+            document.getElementById(
+                'philsms-review-feedback'
+            ).textContent =
+                'Please authorize SMS delivery before continuing.';
+            return;
+        }
 
         if (busyDraftRows.has(row) ||
             unsavedDraftRows.has(row) ||
@@ -746,36 +809,72 @@ $live = ($liveSendingEnabled === true);
         setNotificationBusy(row, true);
 
         try {
-            // Validate again. Never call the live delivery endpoint.
+
+            // Submit the exact single-use authorization issued during review.
+            const deliveryPayload = new URLSearchParams({
+                csrf: notificationCsrf.value,
+                queue_id: queueId,
+                confirmation_token: confirmationToken
+            });
+
+            // Include explicit administrator authorization in live mode.
+            if (notificationLiveMode) {
+                deliveryPayload.set('live_authorization', '1');
+            }
+
             const {response, data} = await notificationPost(
-                notificationPreviewUrl,
-                new URLSearchParams({
-                    csrf: notificationCsrf.value,
-                    queue_id: queueId
-                })
+                notificationDeliverUrl,
+                deliveryPayload
             );
 
-            if (!response.ok || data.success !== true ||
-                data.dry_run !== true) {
-                throw new Error('Validation failed');
+            let message;
+            let tone = 'warning';
+
+            if (data.status === 'sent' && response.ok && data.success === true) {
+                message = data.message ||
+                    'PhilSMS accepted the SMS submission.';
+                tone = 'success';
+            } else if (data.dry_run === true && response.ok) {
+                message = 'Dry run completed successfully. No SMS was sent.';
+                tone = 'success';
+            } else if (data.status === 'uncertain') {
+                message = 'SMS submission outcome is uncertain. Check the queue before taking further action.';
+                tone = 'warning';
+            } else if (data.status === 'failed') {
+                message = data.message ||
+                    'SMS submission failed. Review the notification.';
+                tone = 'danger';
+            } else if (data.status === 'not_pending') {
+                message = 'Notification is no longer pending. Refresh the queue.';
+                tone = 'warning';
+            } else {
+                message = data.message ||
+                    'Delivery was not authorized. Review the notification again.';
+                tone = 'warning';
             }
+
+            showNotificationResult(row, message, tone);
+
+            // The server has consumed the confirmation token.
+            pendingReview = null;
+            closeReviewModal();
+
+        } catch (error) {
+            // The request may have reached the server even if the browser
+            // did not receive its response. Never automatically retry.
+            pendingReview = null;
 
             showNotificationResult(
                 row,
-                'Dry run completed successfully. No SMS was sent.',
-                'success'
+                'Delivery outcome could not be confirmed. Refresh the queue and verify its status before taking further action.',
+                'warning'
             );
 
-            pendingReview = null;
             closeReviewModal();
-        } catch (error) {
-            document.getElementById(
-                'philsms-review-feedback'
-            ).textContent =
-                'Dry-run validation failed. No delivery was requested.';
+
         } finally {
-            confirmDryRunButton.disabled = false;
             setNotificationBusy(row, false);
+            updateConfirmationButtonState();
         }
     });
 
@@ -846,7 +945,7 @@ $live = ($liveSendingEnabled === true);
 
 search.addEventListener('input', filterMembers);
 search.addEventListener('search', filterMembers);
- 
+
     boxes.forEach(box => {
         box.addEventListener('change', function () {
             if (boxes.filter(item => item.checked).length > 25) {

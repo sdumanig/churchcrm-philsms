@@ -274,11 +274,27 @@ try {
             $person['phone']
         );
 
-        $result = $method->invoke(
-            null,
-            $id,
-            $scenario['submit']
-        );
+$preview = NotificationQueue::getDeliveryPreview($id);
+
+if ($preview === null) {
+    throw new RuntimeException(
+        'Integration fixture preview unavailable.'
+    );
+}
+
+$fingerprint = NotificationQueue::deliveryFingerprint(
+    $id,
+    $preview['recipient_name'],
+    $preview['recipient_phone'],
+    $preview['message']
+);
+
+  $result = $method->invoke(
+    null,
+    $id,
+    $scenario['submit'],
+    $fingerprint
+);
 
         $record = queueRecord($id);
 
@@ -303,15 +319,16 @@ try {
             "{$description}: sent timestamp"
         );
 
-        $duplicate = $method->invoke(
-            null,
-            $id,
-            static function (): array {
-                throw new RuntimeException(
-                    'Duplicate submission must not execute.'
-                );
-            }
+$duplicate = $method->invoke(
+    null,
+    $id,
+    static function (): array {
+        throw new RuntimeException(
+            'Duplicate submission must not execute.'
         );
+    },
+    $fingerprint
+);
 
         assertion(
             $duplicate['status'] === 'not_pending',
