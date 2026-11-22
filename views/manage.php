@@ -12,7 +12,7 @@ if (empty($_SESSION['philsms_csrf'])) {
 }
 
 $base = htmlspecialchars($sRootPath, ENT_QUOTES, 'UTF-8');
-$live = getenv('PHILSMS_LIVE_SEND') === '1';
+$live = ($liveSendingEnabled === true);
 ?>
 
 <div class="container py-3">
@@ -199,7 +199,7 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
                                                  class="btn btn-outline-primary btn-sm philsms-review-deliver"
                                                  data-queue-id="<?= (int) $notification['id'] ?>">
                                                  <i class="fa fa-clipboard-check" aria-hidden="true"></i>
-                                                 Review &amp; Deliver
+                                                 <?= $live ? 'Review &amp; Deliver' : 'Review Notification' ?>
                                              </button>
                                             <div class="small mt-1 philsms-draft-result"
                                                  role="status"
@@ -361,7 +361,7 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
     </p>
 </div>
 
-<!-- Approval notification review: staging dry-run only -->
+<!-- Approval notification review: mode-aware, live delivery locked -->
 <div class="modal fade" id="philsms-notification-review-modal"
      tabindex="-1" aria-labelledby="philsms-review-title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -375,8 +375,14 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
             </div>
             <div class="modal-body">
                 <div class="alert alert-info">
-                    <strong>Staging dry run.</strong>
-                    No SMS will be sent.
+                    <?php if ($live): ?>
+                        <strong>LIVE SMS DELIVERY.</strong>
+                        Sending will consume SMS credits.
+                        Live confirmation is not yet enabled.
+                    <?php else: ?>
+                        <strong>Dry run.</strong>
+                        No SMS will be sent.
+                    <?php endif; ?>
                 </div>
                 <div class="mb-3">
                     <div class="small text-muted">Recipient</div>
@@ -394,8 +400,9 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
                 <button type="button" class="btn btn-secondary"
                         data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary"
-                        id="philsms-confirm-dry-run">
-                    Confirm Dry Run
+                        id="philsms-confirm-dry-run"
+                        <?= $live ? 'disabled' : '' ?>>
+                    <?= $live ? 'Confirm &amp; Send SMS' : 'Confirm Dry Run' ?>
                 </button>
             </div>
         </div>
@@ -407,7 +414,7 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
 (function () {
     'use strict';
 
-    // Notification review workflow. Staging dry-run only.
+    // Notification review workflow. Live delivery remains locked.
     const draftRevisions = new WeakMap();
     const busyDraftRows = new WeakSet();
     const unsavedDraftRows = new WeakSet();

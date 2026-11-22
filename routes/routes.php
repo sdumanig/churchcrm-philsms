@@ -131,6 +131,7 @@ $app->get('/philsms/manage', function(
         'sRootPath' => SystemURLs::getRootPath(),
         'sPageTitle' => 'PhilSMS Messaging',
         'configured' => $plugin->isConfigured(),
+        'liveSendingEnabled' => $plugin->isLiveSendingEnabled(),
         'people' => $people,
         'credits' => $credits,
         'creditsError' => $creditsError,
