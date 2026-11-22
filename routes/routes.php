@@ -73,31 +73,113 @@ $app->get('/philsms/manage', function(
     ]);
 
 })->add(AdminRoleAuthMiddleware::class);
-$app->post('/philsms/send', function(Request $request,Response $response):Response {
- $data=(array)$request->getParsedBody();
- // Use the authenticated PHP session for request forgery protection.
- if (session_status()!==PHP_SESSION_ACTIVE) { return $response->withStatus(403); }
- if (!isset($_SESSION['philsms_csrf'])||!hash_equals($_SESSION['philsms_csrf'],(string)($data['csrf']??''))) return $response->withStatus(403);
- $out=[]; $message=trim((string)($data['message']??''));
- $ids=array_values(array_unique(array_filter(array_map('intval',preg_split('/[\s,]+/',(string)($data['person_ids']??''))))));
- if (count($ids)>25 || !$ids || mb_strlen($message)>1000 || $message==='') $out[]='Invalid request: provide 1–25 member IDs and message up to 1000 characters.';
- else {
-  try {
-   $client=new PhilSMSClient((string)(getenv('PHILSMS_API_TOKEN')?:''));
-   $dry=(getenv('PHILSMS_LIVE_SEND')!=='1');
-   foreach ($ids as $id) {
-    $person=PersonQuery::create()->findPk($id);
-    if (!$person) { $out[]="Member #$id not found"; continue; }
-    $phone=PhilSMSClient::normalize((string)$person->getCellPhone());
-    if (!$phone) { $out[]="Member #$id has no valid mobile number"; continue; }
-    if ($dry) { $out[]="DRY RUN: member #$id -> $phone"; continue; }
-    try { $result=$client->send($phone,$message); $out[]="Member #$id: submitted (".htmlspecialchars((string)($result['status']??'accepted'),ENT_QUOTES).")"; }
-    catch (\Throwable $e) { $out[]="Member #$id: failed: ".$e->getMessage(); }
-   }
-  } catch (\Throwable $e) { $out[]=$e->getMessage(); }
- }
- $response->getBody()->write('<!doctype html><meta charset="utf-8"><title>PhilSMS result</title><h2>PhilSMS result</h2><p><a href="'.htmlspecialchars(SystemURLs::getRootPath().'/plugins/philsms/manage',ENT_QUOTES).'">Back to PhilSMS</a></p><pre>'.htmlspecialchars(implode("\n",$out),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</pre>');
- return $response->withHeader('Content-Type','text/html; charset=UTF-8')->withHeader('Cache-Control','no-store');
+
+$app->post('/philsms/send', function (Request $request, Response $response): Response {
+    $data = (array) $request->getParsedBody();
+
+    $json = function (int $status, array $payload) use ($response): Response {
+        $response->getBody()->write(json_encode(
+            $payload,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        ));
+
+        return $response
+            ->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8')
+            ->withHeader('Cache-Control', 'no-store');
+    };
+
+    if (session_status() !== PHP_SESSION_ACTIVE ||
+        !isset($_SESSION['philsms_csrf']) ||
+        !hash_equals(
+            $_SESSION['philsms_csrf'],
+            (string) ($data['csrf'] ?? '')
+        )) {
+        return $json(403, [
+            'success' => false,
+            'message' => 'Your session has expired or the security token is invalid.'
+        ]);
+    }
+
+    $message = trim((string) ($data['message'] ?? ''));
+    $ids = array_values(array_unique(array_filter(
+        array_map(
+            'intval',
+            preg_split('/[\s,]+/', (string) ($data['person_ids'] ?? ''))
+        ),
+        static fn (int $id): bool => $id > 0
+    )));
+
+    if (!$ids || count($ids) > 25 || $message === '' ||
+        mb_strlen($message) > 1000) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'Select 1–25 recipients and enter a message of up to 1000 characters.'
+        ]);
+    }
+
+    $dry = getenv('PHILSMS_LIVE_SEND') !== '1';
+    $results = [];
+    $processed = 0;
+    $failed = 0;
+
+    try {
+        $client = $dry
+            ? null
+            : new PhilSMSClient((string) (getenv('PHILSMS_API_TOKEN') ?: ''));
+
+        foreach ($ids as $id) {
+            $person = PersonQuery::create()->findPk($id);
+
+            if (!$person) {
+                $failed++;
+                $results[] = "Member #{$id}: not found";
+                continue;
+            }
+
+            $phone = PhilSMSClient::normalize((string) $person->getCellPhone());
+
+            if (!$phone) {
+                $failed++;
+                $results[] = "Member #{$id}: no valid mobile number";
+                continue;
+            }
+
+            if ($dry) {
+                $processed++;
+                $results[] = "Member #{$id}: validated (dry run)";
+                continue;
+            }
+
+            try {
+                $client->send($phone, $message);
+                $processed++;
+                $results[] = "Member #{$id}: submitted to PhilSMS";
+            } catch (\Throwable $e) {
+                $failed++;
+                error_log("PhilSMS send failed for Person ID {$id}: " . get_class($e));
+                $results[] = "Member #{$id}: sending failed";
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('PhilSMS processing error: ' . get_class($e));
+
+        return $json(500, [
+            'success' => false,
+            'message' => 'Unable to process the SMS request.'
+        ]);
+    }
+
+    return $json(200, [
+        'success' => $failed === 0 && $processed > 0,
+        'dry_run' => $dry,
+        'processed' => $processed,
+        'failed' => $failed,
+        'message' => $dry
+            ? 'SMS dry run completed. No messages were sent.'
+            : 'SMS submission completed. Check the individual results.',
+        'results' => $results
+    ]);
 })->add(AdminRoleAuthMiddleware::class);
 $app->get('/philsms/balance', function(Request $request,Response $response):Response {
  try { $result=(new PhilSMSClient((string)(getenv('PHILSMS_API_TOKEN')?:'')))->balance(); $response->getBody()->write('<pre>'.htmlspecialchars(json_encode($result,JSON_PRETTY_PRINT),ENT_QUOTES).'</pre>'); }

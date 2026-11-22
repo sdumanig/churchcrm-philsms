@@ -165,6 +165,13 @@ $live = getenv('PHILSMS_LIVE_SEND') === '1';
         </button>
     </form>
 
+<div id="philsms-result"
+     class="alert mt-3"
+     role="status"
+     aria-live="polite"
+     style="display:none;">
+</div>
+
     <p class="mt-3 text-muted">
         Administrators only. Confirm recipient consent before
         sending. Maximum 25 recipients per submission.
@@ -234,22 +241,91 @@ search.addEventListener('search', filterMembers);
 
     message.addEventListener('input', update);
 
-    form.addEventListener('submit', function (event) {
+
+form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    update();
+
+    if (button.disabled) {
+        return;
+    }
+
+    const count = Number(counter.textContent);
+
+    if (!confirm(
+        'Process SMS for ' + count + ' selected recipient(s)?'
+    )) {
+        return;
+    }
+
+    const resultBox = document.getElementById('philsms-result');
+    const originalText = button.textContent;
+
+    button.disabled = true;
+    button.textContent = 'Processing...';
+
+    resultBox.style.display = 'block';
+    resultBox.className = 'alert alert-info mt-3';
+    resultBox.textContent = 'Processing SMS request...';
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+
+        if (!contentType.includes('application/json')) {
+            throw new Error('Unexpected server response.');
+        }
+
+        const data = await response.json();
+
+        resultBox.className =
+            response.ok && data.success
+                ? 'alert alert-success mt-3'
+                : 'alert alert-warning mt-3';
+
+        const summary = document.createElement('div');
+        summary.textContent = data.message || 'Request completed.';
+
+        resultBox.replaceChildren(summary);
+
+        if (Array.isArray(data.results)) {
+            const list = document.createElement('ul');
+            list.className = 'mb-0 mt-2';
+
+            data.results.forEach(function (item) {
+                const li = document.createElement('li');
+                li.textContent = item;
+                list.appendChild(li);
+            });
+
+            resultBox.appendChild(list);
+        }
+
+        if (data.dry_run === true) {
+            const note = document.createElement('div');
+            note.className = 'mt-2 fw-bold';
+            note.textContent = 'DRY RUN — no SMS was sent.';
+            resultBox.appendChild(note);
+        }
+
+    } catch (error) {
+        resultBox.className = 'alert alert-danger mt-3';
+        resultBox.textContent =
+            'Unable to process the request. Check your connection and try again.';
+    } finally {
+        button.textContent = originalText;
         update();
+    }
+});
 
-        if (button.disabled) {
-            event.preventDefault();
-            return;
-        }
-
-        if (!confirm(
-            'Process SMS for ' +
-            counter.textContent +
-            ' selected recipient(s)?'
-        )) {
-            event.preventDefault();
-        }
-    });
 
     update();
 })();
