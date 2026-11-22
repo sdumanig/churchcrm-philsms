@@ -222,12 +222,35 @@ final class NotificationQueue
     }
 
     /**
+     * Fingerprint the exact notification payload reviewed by an administrator.
+     */
+    public static function deliveryFingerprint(
+        int $queueId,
+        string $recipientName,
+        string $recipientPhone,
+        string $message
+    ): string {
+        return hash('sha256', json_encode(
+            [
+                $queueId,
+                $recipientName,
+                $recipientPhone,
+                $message
+            ],
+            JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        ));
+    }
+
+    /**
      * Atomically claim a pending notification for delivery.
      *
      * Does not contact the SMS provider.
      * A processing notification must never be automatically reclaimed.
      */
-    public static function claimForDeliveryPayload(int $queueId): ?array
+    public static function claimForDeliveryPayload(
+        int $queueId,
+        ?string $expectedFingerprint = null
+    ): ?array
     {
         if ($queueId <= 0) {
             throw new \InvalidArgumentException(
@@ -268,6 +291,24 @@ final class NotificationQueue
                 throw new \InvalidArgumentException(
                     'Notification requires a valid recipient and message.'
                 );
+            }
+
+            if ($expectedFingerprint !== null) {
+                $actualFingerprint = self::deliveryFingerprint(
+                    $queueId,
+                    (string) $notification['recipient_name'],
+                    $phone,
+                    $message
+                );
+
+                if (!hash_equals(
+                    $expectedFingerprint,
+                    $actualFingerprint
+                )) {
+                    throw new \InvalidArgumentException(
+                        'Notification changed since review. Review again.'
+                    );
+                }
             }
 
             $candidates = self::getRecipientCandidates(

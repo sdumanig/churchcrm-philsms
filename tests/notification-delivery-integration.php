@@ -133,6 +133,115 @@ try {
         'processClaimedDelivery'
     );
 
+    /*
+     * Fingerprint authorization tests.
+     * These claim disposable queue fixtures without contacting a provider.
+     */
+    $fingerprintScenarios = [
+        'Matching fingerprint' => [
+            'change' => null,
+            'accepted' => true
+        ],
+        'Changed message' => [
+            'change' => 'message',
+            'accepted' => false
+        ],
+        'Changed recipient name' => [
+            'change' => 'recipient_name',
+            'accepted' => false
+        ],
+        'Changed recipient phone' => [
+            'change' => 'recipient_phone',
+            'accepted' => false
+        ]
+    ];
+
+    foreach ($fingerprintScenarios as $description => $scenario) {
+        $id = createFixture(
+            $person['id'],
+            $person['name'],
+            $person['phone']
+        );
+
+        $preview = NotificationQueue::getDeliveryPreview($id);
+
+        if ($preview === null) {
+            throw new RuntimeException(
+                "{$description}: fixture preview unavailable."
+            );
+        }
+
+        $fingerprint = NotificationQueue::deliveryFingerprint(
+            $id,
+            $preview['recipient_name'],
+            $preview['recipient_phone'],
+            $preview['message']
+        );
+
+        if ($scenario['change'] !== null) {
+            $changes = [
+                'message' => 'Changed message after review.',
+                'recipient_name' => 'Changed recipient after review.',
+                'recipient_phone' => '00000000000'
+            ];
+
+            $column = $scenario['change'];
+
+            $statement = $connection->prepare(
+                "UPDATE philsms_notification_queue
+                 SET {$column} = ?
+                 WHERE id = ? AND status = 'pending'"
+            );
+
+            $statement->execute([$changes[$column], $id]);
+        }
+
+        $claimed = false;
+        $rejected = false;
+
+        try {
+            $payload = NotificationQueue::claimForDeliveryPayload(
+                $id,
+                $fingerprint
+            );
+
+            $claimed = $payload !== null;
+        } catch (InvalidArgumentException $e) {
+            $rejected = true;
+        }
+
+        $record = queueRecord($id);
+
+        if ($scenario['accepted']) {
+            assertion(
+                $claimed && !$rejected,
+                "{$description}: matching payload accepted"
+            );
+
+            assertion(
+                $record['status'] === 'processing'
+                    && (int) $record['attempts'] === 1,
+                "{$description}: exactly one claim"
+            );
+        } else {
+            assertion(
+                !$claimed && $rejected,
+                "{$description}: stale payload rejected"
+            );
+
+            assertion(
+                $record['status'] === 'pending'
+                    && (int) $record['attempts'] === 0,
+                "{$description}: queue unchanged after rejection"
+            );
+        }
+
+        $delete = $connection->prepare(
+            'DELETE FROM philsms_notification_queue WHERE id = ?'
+        );
+        $delete->execute([$id]);
+    }
+
     $scenarios = [
         'Successful submission' => [
             'expected' => 'sent',
