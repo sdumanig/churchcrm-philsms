@@ -23,6 +23,8 @@ jobs:
           tools: none
       - name: Lint RC3 PHP files
         run: |
+          php -l src/PhilSMSPlugin.php
+          php -l tests/activation-migration-contract.php
           php -l src/LeaderRepository.php
           php -l src/MigrationRunner.php
           php -l tests/leader-repository-unit.php
@@ -39,6 +41,8 @@ jobs:
           php -l src/AssignmentService.php
           php -l tests/assignment-service-integration.php
           php -l tests/assignment-route-mysql-integration.php
+      - name: Verify activation migration ordering
+        run: php tests/activation-migration-contract.php
       - name: Check assignment route security contract
         run: php tests/assignment-route-contract.php
       - name: Exercise assignment route request handling
