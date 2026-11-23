@@ -53,6 +53,7 @@ namespace {
             !str_contains($html, 'Designated leaders') ||
             !str_contains($html, '999') ||
             !str_contains($html, 'philsms-assignment-form') ||
+            !str_contains($html, '/plugins/philsms/assignments/create') ||
             !str_contains($html, 'Record assignment (no SMS)') ||
             !str_contains($html, 'Test Person') ||
             !str_contains($html, 'Test Leader') ||
