@@ -109,13 +109,55 @@ try {
         }
     }
 
-        foreach (['001_notification_queue.sql', '002_message_templates.sql',
-                  '003_default_message_templates.sql'] as $filename) {
+        // Share the version/checksum history table with RC3. DDL implicitly
+        // commits, so a retry must be safe if recording was interrupted.
+        $db->exec('CREATE TABLE IF NOT EXISTS philsms_schema_migrations (
+            version VARCHAR(100) NOT NULL,
+            checksum CHAR(64) NOT NULL,
+            applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (version)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $migrations = [
+            '001_notification_queue' => '001_notification_queue.sql',
+            '002_message_templates' => '002_message_templates.sql',
+            '003_default_message_templates' => '003_default_message_templates.sql',
+        ];
+        // Validate ALL recorded checksums before applying any RC2 migration.
+        $pending = [];
+        foreach ($migrations as $version => $filename) {
             $sql = file_get_contents(__DIR__ . '/../migrations/' . $filename);
             if ($sql === false || trim($sql) === '') {
                 throw new RuntimeException('Reviewed RC2 migration missing.');
             }
+            $checksum = hash('sha256', $sql);
+            $query = $db->prepare('SELECT checksum FROM philsms_schema_migrations WHERE version = ?');
+            $query->execute([$version]);
+            $row = $query->fetch(\PDO::FETCH_ASSOC);
+            if (is_array($row)) {
+                $row = array_change_key_case($row, CASE_LOWER);
+                if (!isset($row['checksum']) || !hash_equals((string) $row['checksum'], $checksum)) {
+                    throw new RuntimeException('Recorded RC2 migration checksum mismatch.');
+                }
+            } else {
+                $pending[$version] = [$sql, $checksum];
+            }
+        }
+        foreach ($pending as $version => [$sql, $checksum]) {
+            // Existing RC2 objects may predate history. Earlier schema preflight
+            // verifies compatibility; INSERT IGNORE preserves edited templates.
             $db->exec($sql);
+            if ($version === '003_default_message_templates') {
+                $keys = ['guest_individual_welcome', 'guest_family_welcome',
+                    'guest_general_welcome', 'guest_followup', 'member_followup'];
+                $placeholders = implode(',', array_fill(0, count($keys), '?'));
+                $check = $db->prepare('SELECT COUNT(DISTINCT template_key) FROM philsms_message_templates WHERE template_key IN (' . $placeholders . ')');
+                $check->execute($keys);
+                if ((int) $check->fetchColumn() !== count($keys)) {
+                    throw new RuntimeException('RC2 default template verification failed.');
+                }
+            }
+            $insert = $db->prepare('INSERT INTO philsms_schema_migrations (version, checksum) VALUES (?, ?)');
+            $insert->execute([$version, $checksum]);
         }
     } finally {
         $release = $db->prepare('SELECT RELEASE_LOCK(?)');
