@@ -55,7 +55,7 @@ namespace {
             !str_contains($html, 'philsms-assignment-form') ||
             !str_contains($html, 'id="philsms-leader-designation-form"') ||
             !str_contains($html, '/plugins/philsms/leaders/designate') ||
-            !str_contains($html, 'name="person_id" type="number" min="1" step="1" required') ||
+            !preg_match('/name="person_id"\\s+type="number"\\s+min="1"\\s+step="1"\\s+required/', $html) ||
             !str_contains($html, 'id="philsms-leader-designation-result"') ||
             !str_contains($html, 'Save leader designation (no SMS)') ||
             !str_contains($html, 'Maximum of seven') && !str_contains($html, 'Up to seven leaders') ||
