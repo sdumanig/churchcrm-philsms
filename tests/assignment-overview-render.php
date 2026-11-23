@@ -55,7 +55,10 @@ namespace {
             !str_contains($html, 'philsms-assignment-form') ||
             !str_contains($html, 'Record assignment (no SMS)') ||
             !str_contains($html, 'Test Person') ||
-            !str_contains($html, 'Test Leader')) {
+            !str_contains($html, 'Test Leader') ||
+            !str_contains($html, 'data-approval-queue-id="123"') ||
+            !str_contains($html, 'philsms-unassigned-approval-rows') ||
+            !str_contains($html, 'row.remove()')) {
             throw new \RuntimeException('Populated overview missing expected records.');
         }
         echo "PASS: populated overview renders\n";
