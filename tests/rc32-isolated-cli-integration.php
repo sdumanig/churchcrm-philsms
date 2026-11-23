@@ -81,7 +81,7 @@ foreach ([1, 2] as $attempt) {
         throw new RuntimeException('Isolated CLI attempt ' . $attempt . ' failed: ' . $output);
     }
 }
-if ((int) $db->query('SELECT COUNT(*) FROM philsms_schema_migrations WHERE version IN ('004_leader_registry', '005_leader_assignments', '006_assignment_activity')')->fetchColumn() !== 3) {
+if ((int) $db->query('SELECT COUNT(*) FROM philsms_schema_migrations WHERE version IN (\'004_leader_registry\', \'005_leader_assignments\', \'006_assignment_activity\')')->fetchColumn() !== 3) {
     throw new RuntimeException('Expected three recorded RC3 migrations.');
 }
 echo "PASS: real-Perpl isolated migration CLI, refusals, idempotency and history\n";
