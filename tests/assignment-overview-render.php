@@ -19,6 +19,7 @@ namespace {
         $assignmentCandidates = $candidates;
         $designatedLeaders = $leaders;
         $assignmentOverviewError = $error;
+        $assignmentContacts = [123 => [['id' => 456, 'name' => 'Test Person']]];
         $people = [];
         $notifications = [];
         $recipientCandidates = [];
@@ -50,7 +51,10 @@ namespace {
         if (!str_contains($html, 'Unassigned approval events') ||
             !str_contains($html, 'individual_approved') ||
             !str_contains($html, 'Designated leaders') ||
-            !str_contains($html, '999')) {
+            !str_contains($html, '999') ||
+            !str_contains($html, 'philsms-assignment-form') ||
+            !str_contains($html, 'Record assignment (no SMS)') ||
+            !str_contains($html, 'Test Person')) {
             throw new \RuntimeException('Populated overview missing expected records.');
         }
         echo "PASS: populated overview renders\n";
