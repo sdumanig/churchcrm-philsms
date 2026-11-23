@@ -206,6 +206,19 @@ $app->get('/philsms/manage', function(
             'Pending approval count temporarily unavailable.';
     }
 
+    // RC3 read-only leader assignment overview. Missing migrations must not
+    // prevent the existing RC2 management page from loading.
+    $assignmentCandidates = [];
+    $designatedLeaders = [];
+    $assignmentOverviewError = null;
+    try {
+        $assignmentCandidates = \ChurchCRM\Plugins\PhilSMS\AssignmentEligibility::listUnassigned();
+        $designatedLeaders = \ChurchCRM\Plugins\PhilSMS\LeaderRepository::listAll();
+    } catch (\Throwable $e) {
+        error_log('[PhilSMS] RC3 assignment overview unavailable: ' . get_class($e));
+        $assignmentOverviewError = 'Assignment overview unavailable until RC3 database migrations are applied.';
+    }
+
     $renderer = new PhpRenderer(__DIR__ . '/../views/');
 
     return $renderer->render($response, 'manage.php', [
@@ -226,6 +239,9 @@ $app->get('/philsms/manage', function(
         'safeSettings' => $safeSettings,
         'pendingApprovalCount' => $pendingApprovalCount,
         'pendingApprovalCountError' => $pendingApprovalCountError,
+        'assignmentCandidates' => $assignmentCandidates,
+        'designatedLeaders' => $designatedLeaders,
+        'assignmentOverviewError' => $assignmentOverviewError,
     ]);
 
 })->add(AdminRoleAuthMiddleware::class);
