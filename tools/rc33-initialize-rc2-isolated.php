@@ -129,6 +129,36 @@ try {
                 throw new RuntimeException('Existing RC2 column definition is incompatible.');
             }
         }
+        // Validate insertion defaults and automatic timestamp maintenance.
+        $expectedDefaults = [
+            'philsms_notification_queue' => [
+                'status' => 'pending', 'attempts' => '0',
+                'created_at' => 'CURRENT_TIMESTAMP',
+                'updated_at' => 'CURRENT_TIMESTAMP',
+            ],
+            'philsms_message_templates' => [
+                'is_enabled' => '1',
+                'created_at' => 'CURRENT_TIMESTAMP',
+                'updated_at' => 'CURRENT_TIMESTAMP',
+            ],
+        ];
+        $defaultQuery = $db->prepare('SELECT column_name, column_default, extra FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?');
+        $defaultQuery->execute([$table]);
+        $defaults = [];
+        foreach ($defaultQuery->fetchAll(\PDO::FETCH_ASSOC) as $field) {
+            $field = array_change_key_case($field, CASE_LOWER);
+            $defaults[strtolower((string) $field['column_name'])] = $field;
+        }
+        foreach ($expectedDefaults[$table] as $name => $expectedDefault) {
+            $actualDefault = strtoupper((string) ($defaults[$name]['column_default'] ?? ''));
+            $actualDefault = preg_replace('/\\(\\)$/', '', $actualDefault);
+            if ($actualDefault !== strtoupper($expectedDefault)) {
+                throw new RuntimeException('Existing RC2 column default is incompatible.');
+            }
+        }
+        if (!str_contains(strtolower((string) ($defaults['updated_at']['extra'] ?? '')), 'on update current_timestamp')) {
+            throw new RuntimeException('Existing RC2 updated_at behavior is incompatible.');
+        }
         $q = $db->prepare('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?');
         $q->execute([$table]);
         $columns = array_map('strtolower', $q->fetchAll(\PDO::FETCH_COLUMN));
