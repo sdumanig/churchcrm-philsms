@@ -1133,3 +1133,63 @@ $app->post('/philsms/assignments/create', function (
         return $json(500, ['success' => false, 'message' => 'Unable to create assignment.']);
     }
 })->add(AdminRoleAuthMiddleware::class);
+
+
+/**
+ * RC3: designate or reactivate an existing ChurchCRM person as a leader.
+ * Administrator-only and CSRF-protected. No SMS transport is invoked.
+ */
+$app->post('/philsms/leaders/designate', function (
+    Request $request,
+    Response $response
+): Response {
+    $json = static function (int $status, array $payload) use ($response): Response {
+        $response->getBody()->write(json_encode(
+            $payload, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        ));
+        return $response->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8')
+            ->withHeader('Cache-Control', 'no-store');
+    };
+
+    $data = $request->getParsedBody();
+    if (!is_array($data)) {
+        return $json(422, ['success' => false, 'message' => 'Invalid request body.']);
+    }
+    if (session_status() !== PHP_SESSION_ACTIVE ||
+        !isset($_SESSION['philsms_csrf']) ||
+        !is_string($_SESSION['philsms_csrf']) ||
+        !is_string($data['csrf'] ?? null) ||
+        !hash_equals($_SESSION['philsms_csrf'], $data['csrf'])) {
+        return $json(403, ['success' => false, 'message' => 'Invalid or expired security token.']);
+    }
+    $rawPersonId = $data['person_id'] ?? null;
+    if ((!is_int($rawPersonId) && !is_string($rawPersonId)) ||
+        !is_int($personId = filter_var(
+            $rawPersonId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]
+        ))) {
+        return $json(422, ['success' => false, 'message' => 'Invalid ChurchCRM person ID.']);
+    }
+
+    try {
+        \ChurchCRM\Plugins\PhilSMS\LeaderRepository::designate($personId);
+        return $json(200, [
+            'success' => true,
+            'message' => 'Leader designation saved. No SMS was sent.'
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        return $json(422, ['success' => false, 'message' => 'ChurchCRM person does not exist or is invalid.']);
+    } catch (\RuntimeException $e) {
+        if ($e->getMessage() === 'Maximum of seven active designated leaders reached.') {
+            return $json(409, ['success' => false, 'message' => 'Maximum of seven active designated leaders reached.']);
+        }
+        if ($e->getMessage() === 'Unable to acquire leader designation lock.') {
+            return $json(503, ['success' => false, 'message' => 'Leader management is busy. Please retry.']);
+        }
+        error_log('[PhilSMS] Leader designation rejected: ' . get_class($e));
+        return $json(403, ['success' => false, 'message' => 'Leader designation not authorized.']);
+    } catch (\Throwable $e) {
+        error_log('[PhilSMS] Leader designation failed: ' . get_class($e));
+        return $json(500, ['success' => false, 'message' => 'Unable to save leader designation.']);
+    }
+})->add(AdminRoleAuthMiddleware::class);
