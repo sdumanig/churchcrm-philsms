@@ -219,6 +219,41 @@ $app->get('/philsms/manage', function(
         $assignmentOverviewError = 'Assignment overview unavailable until RC3 database migrations are applied.';
     }
 
+    // Resolve contact choices for display; AssignmentService independently
+    // revalidates the selected contact during the write transaction.
+    $assignmentContacts = [];
+    if ($assignmentOverviewError === null) {
+        foreach ($assignmentCandidates as $candidate) {
+            $choices = [];
+            $entityId = (int) $candidate['event_entity_id'];
+            try {
+                if ($candidate['event_type'] === 'individual_approved') {
+                    $person = PersonQuery::create()->findPk($entityId);
+                    if ($person !== null) {
+                        $choices[] = [
+                            'id' => (int) $person->getId(),
+                            'name' => trim((string) $person->getFirstName() . ' ' . (string) $person->getLastName()),
+                        ];
+                    }
+                } elseif ($candidate['event_type'] === 'family_approved') {
+                    $family = \ChurchCRM\model\ChurchCRM\FamilyQuery::create()->findPk($entityId);
+                    if ($family !== null) {
+                        foreach ($family->getAdults() as $adult) {
+                            $choices[(int) $adult->getId()] = [
+                                'id' => (int) $adult->getId(),
+                                'name' => trim((string) $adult->getFirstName() . ' ' . (string) $adult->getLastName()),
+                            ];
+                        }
+                        $choices = array_values($choices);
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('[PhilSMS] Assignment contact lookup failed: ' . get_class($e));
+            }
+            $assignmentContacts[(int) $candidate['approval_queue_id']] = $choices;
+        }
+    }
+
     $renderer = new PhpRenderer(__DIR__ . '/../views/');
 
     return $renderer->render($response, 'manage.php', [
@@ -242,6 +277,7 @@ $app->get('/philsms/manage', function(
         'assignmentCandidates' => $assignmentCandidates,
         'designatedLeaders' => $designatedLeaders,
         'assignmentOverviewError' => $assignmentOverviewError,
+        'assignmentContacts' => $assignmentContacts,
     ]);
 
 })->add(AdminRoleAuthMiddleware::class);
