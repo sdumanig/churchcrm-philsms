@@ -32,8 +32,11 @@ jobs:
           php -l src/AssignmentEligibility.php
           php -l tests/assignment-eligibility-integration.php
           php -l routes/routes.php
+          php -l tests/assignment-route-contract.php
           php -l src/AssignmentService.php
           php -l tests/assignment-service-integration.php
+      - name: Check assignment route security contract
+        run: php tests/assignment-route-contract.php
       - name: Run offline leader repository tests
         run: php tests/leader-repository-unit.php
       - name: Run offline migration runner contract checks
