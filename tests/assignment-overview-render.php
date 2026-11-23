@@ -48,27 +48,23 @@ namespace {
             [[ 'id' => 7, 'person_id' => 999, 'is_active' => 1, 'display_name' => 'Test Leader' ]],
             null
         );
-        if (!str_contains($html, 'Unassigned approval events') ||
-            !str_contains($html, 'individual_approved') ||
-            !str_contains($html, 'Designated leaders') ||
-            !str_contains($html, '999') ||
-            !str_contains($html, 'philsms-assignment-form') ||
-            !str_contains($html, 'id="philsms-leader-designation-form"') ||
-            !str_contains($html, '/plugins/philsms/leaders/designate') ||
-            !preg_match('/name="person_id"\\s+type="number"\\s+min="1"\\s+step="1"\\s+required/', $html) ||
-            !str_contains($html, 'id="philsms-leader-designation-result"') ||
-            !str_contains($html, 'Save leader designation (no SMS)') ||
-            !str_contains($html, 'Maximum of seven') && !str_contains($html, 'Up to seven leaders') ||
-            !str_contains($html, 'Refresh leader list') ||
-            str_contains($html, 'Read-only RC3 preview.') ||
-            !str_contains($html, '/plugins/philsms/assignments/create') ||
-            !str_contains($html, 'Record assignment (no SMS)') ||
-            !str_contains($html, 'Test Person') ||
-            !str_contains($html, 'Test Leader') ||
-            !str_contains($html, 'data-approval-queue-id="123"') ||
-            !str_contains($html, 'philsms-unassigned-approval-rows') ||
-            !str_contains($html, 'row.remove()')) {
-            throw new \RuntimeException('Populated overview missing expected records.');
+        $required = [
+            'Unassigned approval events', 'individual_approved', 'Designated leaders',
+            '999', 'philsms-assignment-form', 'id="philsms-leader-designation-form"',
+            '/plugins/philsms/leaders/designate', 'id="philsms-leader-designation-result"',
+            'Save leader designation (no SMS)', 'Up to seven leaders',
+            'Refresh leader list', '/plugins/philsms/assignments/create',
+            'Record assignment (no SMS)', 'Test Person', 'Test Leader',
+            'data-approval-queue-id="123"', 'philsms-unassigned-approval-rows', 'row.remove()'
+        ];
+        foreach ($required as $needle) {
+            if (!str_contains($html, $needle)) {
+                throw new \RuntimeException('Populated overview missing: ' . $needle);
+            }
+        }
+        if (!preg_match('/name="person_id"\\s+type="number"\\s+min="1"\\s+step="1"\\s+required/', $html) ||
+            str_contains($html, 'Read-only RC3 preview.')) {
+            throw new \RuntimeException('Leader designation input contract or outdated preview text.');
         }
         echo "PASS: populated overview and leader designation form render\n";
         if (!preg_match('/<form id="philsms-leader-designation-form"[\\s\\S]*?<\\/form>/', $html, $formMatch) ||
