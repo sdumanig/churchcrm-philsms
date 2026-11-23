@@ -38,6 +38,41 @@ final class MigrationRunner
         }
 
         try {
+            // Prerequisites are checked while holding the same advisory lock
+            // as RC2 initialization, before any RC3 DDL is attempted.
+            foreach (['philsms_notification_queue', 'philsms_message_templates',
+                      self::HISTORY_TABLE] as $requiredTable) {
+                $check = $connection->prepare(
+                    "SELECT COUNT(*) FROM information_schema.tables
+                     WHERE table_schema = DATABASE() AND table_name = ?
+                       AND table_type = 'BASE TABLE' AND engine = 'InnoDB'"
+                );
+                $check->execute([$requiredTable]);
+                if ((int) $check->fetchColumn() !== 1) {
+                    throw new \RuntimeException('RC2 prerequisite table missing or incompatible.');
+                }
+            }
+            foreach ([
+                '001_notification_queue' => '001_notification_queue.sql',
+                '002_message_templates' => '002_message_templates.sql',
+                '003_default_message_templates' => '003_default_message_templates.sql',
+            ] as $version => $filename) {
+                $sql = file_get_contents(__DIR__ . '/../migrations/' . $filename);
+                if ($sql === false || trim($sql) === '') {
+                    throw new \RuntimeException('RC2 prerequisite migration file missing.');
+                }
+                $check = $connection->prepare(
+                    'SELECT checksum FROM ' . self::HISTORY_TABLE . ' WHERE version = ?'
+                );
+                $check->execute([$version]);
+                $row = $check->fetch(\PDO::FETCH_ASSOC);
+                $row = is_array($row) ? array_change_key_case($row, CASE_LOWER) : [];
+                if (!isset($row['checksum'])
+                    || !hash_equals(hash('sha256', $sql), (string) $row['checksum'])) {
+                    throw new \RuntimeException('RC2 prerequisite migration history invalid.');
+                }
+            }
+
             $connection->exec(
                 'CREATE TABLE IF NOT EXISTS ' . self::HISTORY_TABLE . ' (
                     version VARCHAR(100) NOT NULL,
