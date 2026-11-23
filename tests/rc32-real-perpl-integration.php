@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Read-only integration test with real Perpl 2.7.0 and disposable MySQL.
  * Never invokes the migration command or ChurchCRM's application bootstrap.
  */
-$autoload = realpath(__DIR__ . '/fixtures/rc32-real-perpl/vendor/autoload.php');
+$autoload = realpath(getenv('PHILSMS_TEST_PERPL_AUTOLOAD') ?: __DIR__ . '/fixtures/rc32-real-perpl/vendor/autoload.php');
 $adapter = realpath(__DIR__ . '/../src/CliPropelAdapter.php');
 if ($autoload === false || $adapter === false) {
     throw new RuntimeException('Missing test dependencies or adapter.');
