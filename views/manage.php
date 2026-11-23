@@ -560,9 +560,58 @@ $live = ($liveSendingEnabled === true);
                 <strong>Assign to a Leader</strong>
             </div>
             <div class="card-body">
-                <p class="text-muted mb-0">
-                    This feature will be enabled in the next release.
+                <p class="text-muted">
+                    Read-only RC3 preview. Assignment creation is not yet enabled
+                    in this interface. No SMS is sent.
                 </p>
+                <?php if (!empty($assignmentOverviewError)): ?>
+                    <div class="alert alert-warning" role="status">
+                        <?= htmlspecialchars((string) $assignmentOverviewError, ENT_QUOTES, 'UTF-8') ?>
+                    </div>
+                <?php else: ?>
+                    <h5>Unassigned approval events</h5>
+                    <?php if (empty($assignmentCandidates)): ?>
+                        <p>No unassigned approval events are recorded.</p>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped">
+                                <thead><tr>
+                                    <th>Approval event</th><th>Type</th>
+                                    <th>ChurchCRM record ID</th><th>Recorded at</th>
+                                </tr></thead>
+                                <tbody>
+                                <?php foreach ($assignmentCandidates as $candidate): ?>
+                                    <tr>
+                                        <td><?= (int) $candidate['approval_queue_id'] ?></td>
+                                        <td><?= htmlspecialchars((string) $candidate['event_type'], ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td><?= (int) $candidate['event_entity_id'] ?></td>
+                                        <td><?= htmlspecialchars((string) $candidate['approved_event_at'], ENT_QUOTES, 'UTF-8') ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                    <h5>Designated leaders</h5>
+                    <?php if (empty($designatedLeaders)): ?>
+                        <p>No designated leaders are recorded.</p>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped">
+                                <thead><tr><th>Leader record</th><th>ChurchCRM person ID</th><th>Status</th></tr></thead>
+                                <tbody>
+                                <?php foreach ($designatedLeaders as $leader): ?>
+                                    <tr>
+                                        <td><?= (int) $leader['id'] ?></td>
+                                        <td><?= (int) $leader['person_id'] ?></td>
+                                        <td><?= !empty($leader['is_active']) ? 'Active' : 'Inactive' ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>
