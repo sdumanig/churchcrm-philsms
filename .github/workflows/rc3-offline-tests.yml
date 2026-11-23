@@ -38,6 +38,7 @@ jobs:
           php -l tests/assignment-route-behavior.php
           php -l src/AssignmentService.php
           php -l tests/assignment-service-integration.php
+          php -l tests/assignment-route-mysql-integration.php
       - name: Check assignment route security contract
         run: php tests/assignment-route-contract.php
       - name: Exercise assignment route request handling
@@ -89,3 +90,5 @@ jobs:
         run: php tests/assignment-eligibility-integration.php
       - name: Run transactional assignment integration test
         run: php tests/assignment-service-integration.php
+      - name: Exercise assignment route with isolated MySQL
+        run: php tests/assignment-route-mysql-integration.php
