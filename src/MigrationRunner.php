@@ -21,7 +21,9 @@ final class MigrationRunner
      *
      * @var array<string, string>
      */
-    private const MIGRATIONS = [];
+    private const MIGRATIONS = [
+        '004_leader_registry' => '004_leader_registry.sql',
+    ];
 
     public static function run(): void
     {
