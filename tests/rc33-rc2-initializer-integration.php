@@ -91,4 +91,7 @@ if ($status === 0 || !str_contains($out, 'REFUSED:')) {
 if ($db->query("SELECT message_body FROM philsms_message_templates WHERE template_key = 'guest_general_welcome'")->fetchColumn() !== 'Custom preserved') {
     throw new RuntimeException('Checksum refusal changed a customized template.');
 }
+// Restore the disposable fixture so subsequent RC3 tests see valid RC2 history.
+$restore = $db->prepare('UPDATE philsms_schema_migrations SET checksum = ? WHERE version = ?');
+$restore->execute([hash('sha256', (string) file_get_contents(__DIR__ . '/../migrations/002_message_templates.sql')), '002_message_templates']);
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
