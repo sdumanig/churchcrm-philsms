@@ -86,6 +86,12 @@ try {
         $q->execute([$table]);
         $indices = [];
         foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            // MySQL/PDO/Perpl may preserve INFORMATION_SCHEMA field names
+            // in uppercase; normalize associative keys before inspection.
+            $row = array_change_key_case($row, CASE_LOWER);
+            if (!isset($row['index_name'], $row['column_name'])) {
+                throw new RuntimeException('Unexpected RC2 index metadata.');
+            }
             $indices[$row['index_name']][] = $row['column_name'];
         }
         foreach ($definition['unique'] as $name => $cols) {
