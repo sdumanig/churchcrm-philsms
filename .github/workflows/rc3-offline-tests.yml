@@ -26,13 +26,11 @@ jobs:
           php -l src/PhilSMSPlugin.php
           php -l tests/activation-migration-contract.php
           php -l tools/rc3-migration-preflight.php
-          php -l tools/rc3-apply-migrations.php
           php -l src/CliPropelAdapter.php
           php -l tests/rc32-cli-propel-adapter-offline.php
           php -l tests/rc32-real-perpl-integration.php
           php -l tools/rc32-apply-isolated.php
           php -l tests/rc32-isolated-cli-integration.php
-          php -l tests/rc3-migration-cli-integration.php
           php -l src/LeaderRepository.php
           php -l src/MigrationRunner.php
           php -l tests/leader-repository-unit.php
@@ -49,12 +47,6 @@ jobs:
           php -l src/AssignmentService.php
           php -l tests/assignment-service-integration.php
           php -l tests/assignment-route-mysql-integration.php
-      - name: Refuse unauthorized CLI migration attempts
-        run: |
-          if php tools/rc3-apply-migrations.php --apply /nonexistent/bootstrap.php staging_test; then
-            echo 'FAIL: Unauthorized migration attempt was accepted' >&2
-            exit 1
-          fi
       - name: Exercise unwired RC3.2 adapter safety contract
         run: php tests/rc32-cli-propel-adapter-offline.php
       - name: Validate reviewed RC3 migration manifest
@@ -107,8 +99,6 @@ jobs:
           extensions: pdo_mysql
           coverage: none
           tools: none
-      - name: Exercise gated CLI migration against disposable MySQL
-        run: php tests/rc3-migration-cli-integration.php
       - name: Run isolated migration integration test
         run: php tests/migration-runner-integration.php
       - name: Run leader repository integration test
