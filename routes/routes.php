@@ -311,6 +311,97 @@ $app->post('/philsms/templates/save', function (
     }
 })->add(AdminRoleAuthMiddleware::class);
 
+/**
+ * Prepare an editable welcome-message draft for an eligible recipient.
+ * Administrator-only; does not save or send SMS.
+ */
+$app->post('/philsms/notifications/prepare-welcome', function (
+    Request $request,
+    Response $response
+): Response {
+    $data = (array) $request->getParsedBody();
+
+    $json = static function (int $status, array $payload) use ($response): Response {
+        $response->getBody()->write(json_encode(
+            $payload,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        ));
+
+        return $response
+            ->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8')
+            ->withHeader('Cache-Control', 'no-store');
+    };
+
+    if (session_status() !== PHP_SESSION_ACTIVE ||
+        !isset($_SESSION['philsms_csrf']) ||
+        !hash_equals(
+            $_SESSION['philsms_csrf'],
+            (string) ($data['csrf'] ?? '')
+        )) {
+        return $json(403, [
+            'success' => false,
+            'message' => 'Your session has expired or the security token is invalid.'
+        ]);
+    }
+
+    $queueId = filter_var(
+        $data['queue_id'] ?? null,
+        FILTER_VALIDATE_INT,
+        ['options' => ['min_range' => 1]]
+    );
+
+    $recipientId = filter_var(
+        $data['recipient_person_id'] ?? null,
+        FILTER_VALIDATE_INT,
+        ['options' => ['min_range' => 1]]
+    );
+
+    if (!is_int($queueId) || !is_int($recipientId)) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'Select a valid notification and recipient.'
+        ]);
+    }
+
+    try {
+        $message = NotificationQueue::prepareWelcomeDraft(
+            $queueId,
+            $recipientId
+        );
+
+        if ($message === null) {
+            return $json(200, [
+                'success' => true,
+                'available' => false,
+                'message' => ''
+            ]);
+        }
+
+        return $json(200, [
+            'success' => true,
+            'available' => true,
+            'message' => $message
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'The selected recipient or template is invalid.'
+        ]);
+    } catch (\Throwable $e) {
+        error_log(
+            '[PhilSMS] Welcome message preparation failed: ' .
+            get_class($e)
+        );
+
+        return $json(500, [
+            'success' => false,
+            'message' => 'Unable to prepare the welcome message.'
+        ]);
+    }
+})->add(AdminRoleAuthMiddleware::class);
+
+
 $app->post('/philsms/notifications/save-draft', function (
     Request $request,
     Response $response

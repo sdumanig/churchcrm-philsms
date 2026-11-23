@@ -138,6 +138,57 @@ final class NotificationQueue
     }
 
     /**
+     * Prepare a welcome message for an eligible pending notification recipient.
+     * Read-only: does not save a draft, change status, or send SMS.
+     */
+    public static function prepareWelcomeDraft(
+        int $queueId,
+        int $recipientPersonId
+    ): ?string {
+        if ($queueId <= 0 || $recipientPersonId <= 0) {
+            throw new \InvalidArgumentException('Invalid notification or recipient.');
+        }
+
+        $connection = Propel::getReadConnection('default');
+        $statement = $connection->prepare(
+            'SELECT event_type, event_entity_id, status
+             FROM philsms_notification_queue
+             WHERE id = ?'
+        );
+        $statement->execute([$queueId]);
+        $notification = $statement->fetch(\PDO::FETCH_ASSOC);
+
+        if (!$notification || $notification['status'] !== 'pending') {
+            return null;
+        }
+
+        $candidates = self::getRecipientCandidates(
+            (string) $notification['event_type'],
+            (int) $notification['event_entity_id']
+        );
+
+        $eligible = false;
+
+        foreach ($candidates as $candidate) {
+            if ((int) $candidate['person_id'] === $recipientPersonId) {
+                $eligible = true;
+                break;
+            }
+        }
+
+        if (!$eligible) {
+            throw new \InvalidArgumentException(
+                'Selected recipient is not eligible for this notification.'
+            );
+        }
+
+        return WelcomeMessagePreparer::prepare(
+            (string) $notification['event_type'],
+            $recipientPersonId
+        );
+    }
+
+    /**
      * Save a recipient and message for a pending approval notification.
      * Does not send SMS, change status, or increment attempts.
      */

@@ -182,7 +182,6 @@ $live = ($liveSendingEnabled === true);
                         <thead>
                             <tr>
                                 <th>Template</th>
-                                <th>Type</th>
                                 <th>Status</th>
                                 <th>Message</th>
                                 <th>Action</th>
@@ -197,13 +196,6 @@ $live = ($liveSendingEnabled === true);
                                             ENT_QUOTES,
                                             'UTF-8'
                                         ) ?>
-                                    </td>
-                                    <td>
-                                        <code><?= htmlspecialchars(
-                                            (string) $template['template_key'],
-                                            ENT_QUOTES,
-                                            'UTF-8'
-                                        ) ?></code>
                                     </td>
                                     <td>
                                         <?= (int) $template['is_enabled'] === 1
@@ -569,9 +561,7 @@ $live = ($liveSendingEnabled === true);
             </div>
             <div class="card-body">
                 <p class="text-muted mb-0">
-                    ChurchCRM leader selection and assignment
-                    will be configured here. A maximum of seven
-                    leaders may be selected.
+                    This feature will be enabled in the next release.
                 </p>
             </div>
         </div>
@@ -1005,6 +995,98 @@ Explicit authorization is required.
         $base . '/plugins/philsms/notifications/deliver',
         JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
     ) ?>;
+
+    const notificationPrepareUrl = <?= json_encode(
+        $base . '/plugins/philsms/notifications/prepare-welcome',
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ) ?>;
+
+    const welcomeRequestVersions = new WeakMap();
+
+    document.querySelectorAll('.philsms-draft-recipient').forEach(function (recipient) {
+        const row = recipient.closest('tr');
+        const draft = row?.querySelector('.philsms-draft-message');
+        const saveButton = row?.querySelector('.philsms-save-draft');
+
+        if (!row || !draft || !saveButton) return;
+
+        recipient.addEventListener('change', async function () {
+            const version = (welcomeRequestVersions.get(row) || 0) + 1;
+            welcomeRequestVersions.set(row, version);
+
+            // Preserve saved messages and any text already entered.
+            if (!recipient.value || draft.value.trim() !== '' ||
+                !notificationCsrf || busyDraftRows.has(row)) {
+                return;
+            }
+
+            const selectedRecipient = recipient.value;
+            const startingRevision = draftRevisions.get(row) || 0;
+
+            showNotificationResult(
+                row, 'Preparing welcome message...', 'muted'
+            );
+
+            try {
+                const {response, data} = await notificationPost(
+                    notificationPrepareUrl,
+                    new URLSearchParams({
+                        csrf: notificationCsrf.value,
+                        queue_id: saveButton.dataset.queueId,
+                        recipient_person_id: selectedRecipient
+                    })
+                );
+
+                // Do not overwrite user edits or a newer recipient selection.
+                if (welcomeRequestVersions.get(row) !== version ||
+                    recipient.value !== selectedRecipient ||
+                    (draftRevisions.get(row) || 0) !== startingRevision ||
+                    draft.value !== '' ||
+                    busyDraftRows.has(row)) {
+                    return;
+                }
+
+                if (!response.ok || data.success !== true) {
+                    showNotificationResult(
+                        row,
+                        data.message || 'Unable to prepare welcome message.',
+                        'warning'
+                    );
+                    return;
+                }
+
+                if (data.available !== true ||
+                    typeof data.message !== 'string' ||
+                    data.message.trim() === '') {
+                    showNotificationResult(
+                        row,
+                        'No enabled welcome template is available. Enter a message manually.',
+                        'warning'
+                    );
+                    return;
+                }
+
+                draft.value = data.message;
+                draft.dispatchEvent(new Event('input', {bubbles: true}));
+
+                showNotificationResult(
+                    row,
+                    'Welcome message prepared. Review and save the draft.',
+                    'warning'
+                );
+            } catch (error) {
+                if (welcomeRequestVersions.get(row) === version &&
+                    recipient.value === selectedRecipient &&
+                    draft.value === '') {
+                    showNotificationResult(
+                        row,
+                        'Unable to prepare welcome message. You may enter it manually.',
+                        'warning'
+                    );
+                }
+            }
+        });
+    });
 
     document.querySelectorAll('.philsms-save-draft').forEach(function (button) {
         button.addEventListener('click', async function () {

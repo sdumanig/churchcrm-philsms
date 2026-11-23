@@ -1,66 +1,138 @@
-# PhilSMS for ChurchCRM 7.8.5 — release candidate 1
+# PhilSMS Messaging for ChurchCRM
 
-**Status:** PHP syntax-checked against the supplied ChurchCRM 7.8.5 source. **Not yet tested in a running ChurchCRM or against a live PhilSMS account.** This is a manually deployed community plugin candidate, not an approved-registry installer ZIP.
+**Version:** 1.0.0-rc2 (release candidate)
+**Maintained by:** SDGTech Team of Soli Deo Gloria Christian Church–Davao City
 
-## Install on a staging copy of ChurchCRM
+PhilSMS is a community plugin integrating SMS messaging with ChurchCRM.
 
-1. Back up ChurchCRM database and files. Extract `philsms/` into the ChurchCRM application `plugins/community/` directory (not `src/plugins`). Ensure permissions allow the PHP process to read the files.
-2. Configure the PHP runtime environment (`php-fpm` pool or Apache environment): `PHILSMS_API_TOKEN` = your PhilSMS bearer token. Optionally set `PHILSMS_SENDER_ID` if your PhilSMS account requires it. **Do not put secrets in web-accessible files.**
-3. Set `PHILSMS_LIVE_SEND=0` (or leave unset) for dry run. Restart PHP-FPM / Apache as applicable.
-4. In ChurchCRM's plugin management screen, find PhilSMS Messaging and enable it if discovered. Open `/plugins/philsms/manage` as an administrator.
-5. Enter ChurchCRM person IDs from member profile URLs, compose a message, and test dry run. Use the balance link to test API authentication.
-6. Only after a successful dry run and verification of your PhilSMS API payload, set `PHILSMS_LIVE_SEND=1` and restart PHP. Send **one** test SMS to a consenting member, then verify in PhilSMS dashboard before any batch.
+This release candidate has been tested on a staging installation of
+**ChurchCRM 7.8.6**. It is not yet an approved ChurchCRM community-registry
+plugin, and live SMS delivery has not been verified against a production
+PhilSMS account.
 
-## Important limitations
+## Features
 
-- ChurchCRM 7.8.5's official community plugin installer requires an entry in its approved plugin registry, an approved SHA-256 hash, and an HTTPS download URL. This ZIP is **not** approved and must not be presented as installable through the official URL installer.
-- This release candidate provides individual and multi-member sending by **person ID** (up to 25 per request), plus a balance endpoint. It does **not** yet include a member picker, group selection, persistent message history, delivery-status polling, or a settings UI. Do not assume these exist.
-- The PhilSMS endpoint and request schema must be verified with your account's current API documentation before enabling live sending. Current implementation uses `POST https://app.philsms.com/api/v3/sms/send` with JSON `recipient`, `message`, and optional `sender_id`. If your account requires other fields, adjust before live use.
-- The application must have PHP cURL and mbstring enabled. The plugin relies on ChurchCRM's existing authenticated admin middleware and PHP session for CSRF checks.
-- Consent, opt-out handling, and retention requirements remain the church administrator's responsibility. This version does not automatically check contact preferences.
+### Select ChurchCRM People
 
----
+- Select ChurchCRM people as SMS recipients.
+- Normalize supported Philippine mobile numbers.
+- Compose messages and review SMS character/segment usage.
+- Support multiple recipients, subject to the plugin's submission limits.
+- Use dry-run mode for testing without sending live SMS.
 
-## Project Information
+### Message Templates
 
-**Plugin:** PhilSMS Messaging for ChurchCRM  
-**Version:** 1.0.0-rc1  
-**Developed and maintained by:** SDGTech Team  
-**Organization:** Soli Deo Gloria Christian Church
+- Five configurable message templates:
+  - Individual Guest Welcome
+  - Family Guest Welcome
+  - General Guest Welcome
+  - Guest Follow-up
+  - Assigned Leader Follow-up
+- Edit, preview, enable, and disable templates.
+- Personalize messages using supported placeholders.
+- Automatically prepare the appropriate enabled welcome template when an
+  administrator selects an eligible recipient for an empty pending
+  individual- or family-approval notification.
+- Allow administrators to edit the prepared message before saving.
 
-This plugin was developed with AI assistance using ChatGPT by OpenAI and is maintained by SDGTech Team.
+Automatic preparation does not save a draft or send an SMS. Existing
+nonempty drafts are preserved.
+
+The Assigned Leader Follow-up template is reserved for the upcoming
+leader-assignment feature.
+
+### Approval Notifications
+
+- Queue supported ChurchCRM individual and family approval events.
+- Select eligible recipients and save notification drafts.
+- Review notifications before delivery.
+- Require administrator authorization, CSRF protection, and explicit
+  confirmation for the delivery workflow.
+- Display pending ChurchCRM self-registration counts in the notification
+  tab and plugin navigation when applicable.
+- Maintain notification delivery state and prevent duplicate claims.
+
+### Settings
+
+- View plugin information and SMS configuration status.
+- Configure the PhilSMS API key, Sender ID, and live-sending preference
+  through ChurchCRM's plugin configuration.
+- View the configured SMS mode and account-credit information where
+  available.
+- Avoid displaying stored API secrets in the settings view.
+
+## Planned Features
+
+- **Assign to a Leader:** Leader selection and assignment workflow.
+  The tab currently displays a next-release placeholder.
+- **Person Timeline SMS history:** Full SMS message and delivery details
+  recorded in the relevant ChurchCRM person's timeline.
+
+These features are not included in RC2.
+
+## Installation and Configuration
+
+1. Back up the ChurchCRM application and database.
+2. Deploy the plugin directory to:
+   `plugins/community/philsms`
+3. Ensure the web server can read the plugin files.
+4. Enable PhilSMS through ChurchCRM's Plugin Manager.
+5. Configure the PhilSMS API key and Sender ID.
+6. Keep `PHILSMS_LIVE_SEND=0` in the PHP runtime environment while
+   testing. An unset value also prevents live sending.
+7. Open the PhilSMS management interface as a ChurchCRM administrator.
+
+Live SMS delivery requires **both** the server-side
+`PHILSMS_LIVE_SEND=1` authorization and the corresponding enabled
+ChurchCRM plugin setting. Do not enable live sending until the API
+request format, sender registration, recipient consent, and account
+configuration have been independently verified.
+
+Never commit API keys or credentials to this repository.
+
+## Testing
+
+RC2 development and browser verification were performed against a
+staging ChurchCRM 7.8.6 installation.
+
+The existing seven-script regression suite passed **86 assertions with
+zero failures**. Tests cover authorization, confirmation, notification
+delivery state, message-template validation and rendering, and template
+database integration.
+
+Browser verification confirmed automatic Welcome Message preparation,
+personalization, draft editing, segment counts, and the existing review
+workflow.
+
+These tests do not establish successful live SMS delivery.
+
+## Security and Operational Notes
+
+- Administrative operations require ChurchCRM authorization.
+- Notification draft and delivery routes use CSRF validation.
+- Prepared welcome messages are not automatically saved or sent.
+- The delivery workflow requires an explicit review and confirmation.
+- Live sending is disabled unless both required authorization controls
+  are enabled.
+- Administrators are responsible for recipient consent, applicable
+  privacy requirements, and appropriate retention practices.
 
 ## Compatibility
 
-Tested with ChurchCRM 7.8.5.
+**Tested:** ChurchCRM 7.8.6.
 
-Compatibility with other ChurchCRM versions has not yet been verified.
+Other ChurchCRM versions have not been verified for this release
+candidate. The `minimumCRMVersion` value in `plugin.json` is metadata,
+not a claim that every version from that minimum has been tested.
 
-## Development Status
+## Community Plugin Status
 
-Release Candidate (RC1).
-
-The following functionality has been tested:
-
-- PhilSMS API authentication
-- PhilSMS account balance retrieval
-- ChurchCRM person lookup
-- Philippine mobile number normalization
-- Multiple-recipient selection
-- SMS dry-run processing
-
-Live SMS delivery has not yet been verified and requires an approved PhilSMS Sender ID.
-
-## Security
-
-Configure the PhilSMS API token through the server environment.
-
-Never include API tokens, credentials, or church member information in the distributed plugin.
-
-Keep live sending disabled until configuration and testing are complete.
+This is a manually deployed release candidate. Publication on GitHub
+does not constitute acceptance into the official ChurchCRM community
+plugin registry.
 
 ## Development Acknowledgment
 
-AI-assisted software development using ChatGPT by OpenAI.
+Developed with AI assistance using ChatGPT by OpenAI.
 
 Project maintenance and release management: SDGTech Team.
