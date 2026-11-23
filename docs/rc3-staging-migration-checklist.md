@@ -45,6 +45,30 @@ table. Each migration is idempotent, but MySQL DDL is not transactional; a
 failed run requires investigation before retry. **Do not edit a migration
 already recorded in `philsms_schema_migrations`.**
 
+## Gated CLI invocation for an already-active plugin (not yet staging-validated)
+
+`tools/rc3-apply-migrations.php` is a CLI-only entry point, not a web route.
+It requires an **operator-reviewed ChurchCRM bootstrap file** outside the
+plugin directory that initializes the real Propel connection. The correct
+bootstrap path for the installed ChurchCRM version is **not yet verified**;
+do not guess it or execute this command until confirmed on CT 3200.
+
+After explicit deployment and database-change authorization, a staging
+operator can adapt this template using the *verified* bootstrap path and
+*actual* staging database name:
+
+```bash
+PHILSMS_LIVE_SEND=0 PHILSMS_RC3_STAGING=YES PHILSMS_RC3_MIGRATE=YES \
+  php tools/rc3-apply-migrations.php --apply \
+  /verified/absolute/path/to/churchcrm-bootstrap.php actual_staging_db
+```
+
+The command refuses web execution, missing flags, non-staging database names,
+mismatched connected database names, and missing RC2 notification tables.
+**The name-based staging guard is not proof that a database is non-production**:
+the operator must independently verify the connection target and backup
+before authorizing execution. No production use is permitted.
+
 ## Post-migration verification (only after separately authorized execution)
 
 - Verify exactly the three reviewed versions are recorded with matching
