@@ -90,6 +90,94 @@ configuration have been independently verified.
 
 Never commit API keys or credentials to this repository.
 
+## RC2/RC3 Schema Migration Procedures (Development Branch Only)
+
+**Do not run these commands as part of plugin activation.** PhilSMS activation
+does not initialize RC2 tables or apply RC3 migrations. The procedures below
+are operator-controlled, staging-only operations requiring a separate,
+explicit authorization for the identified staging environment. Publishing
+these instructions does **not** authorize running them on CT 3200 or any
+other server. Never use them against production CT 3100.
+
+### Preconditions and safeguards
+
+- Confirm the exact ChurchCRM staging database identity independently, and
+  take and verify a restorable database backup before any approved change.
+- Keep live sending disabled: `PHILSMS_LIVE_SEND=0`. Neither migration
+  command sends SMS.
+- Use a reviewed **absolute, non-symlink** Perpl vendor autoloader outside
+  the PhilSMS plugin directory. The isolated CLI does not bootstrap ChurchCRM.
+- Supply credentials via protected environment variables, not shell history,
+  committed files, or application logs.
+- The target database name must match the explicit positional argument,
+  contain `staging`, and not contain `prod`. The adapter also verifies
+  the connected database identity.
+- Both commands acquire the MySQL advisory lock
+  `philsms_schema_migrations` before their authoritative schema operations.
+  If the lock or prerequisite validation fails, stop and investigate;
+  never bypass these safeguards.
+
+### Phase 1 — RC2 schema initialization (separate authorization required)
+
+Only after an operator explicitly approves RC2 initialization for the
+specific staging target, configure the protected environment:
+
+```sh
+export PHILSMS_RC2_INITIALIZE=YES
+export PHILSMS_RC3_STAGING=YES
+export PHILSMS_LIVE_SEND=0
+export PHILSMS_RC3_DB_HOST='<staging-db-host>'
+export PHILSMS_RC3_DB_PORT='3306'
+export PHILSMS_RC3_DB_NAME='<verified_staging_db>'
+export PHILSMS_RC3_DB_USER='<staging-db-user>'
+# Set PHILSMS_RC3_DB_PASSWORD securely outside shell history.
+php tools/rc33-initialize-rc2-isolated.php --apply \
+  /absolute/external/vendor/autoload.php '<verified_staging_db>'
+```
+
+This command applies or verifies RC2 migrations 001–003, validates existing
+RC2 schema compatibility, and records migration checksums. It is designed
+to preserve compatible existing queue records and customized templates.
+Review its output and database migration history before proceeding.
+
+### Phase 2 — RC3 migrations (new, separate authorization required)
+
+RC3 must **not** be inferred as authorized merely because RC2 completed.
+After explicit RC3 approval for the same verified staging target, use the
+same protected connection settings and:
+
+```sh
+export PHILSMS_RC3_MIGRATE=YES
+export PHILSMS_RC3_STAGING=YES
+export PHILSMS_LIVE_SEND=0
+php tools/rc32-apply-isolated.php --apply \
+  /absolute/external/vendor/autoload.php '<verified_staging_db>'
+```
+
+The RC3 runner requires valid RC2 schema and checksum history, then applies
+or verifies migrations 004–006 for leader registry, assignments, and activity.
+The runner validates prerequisites **under the shared lock** before RC3 DDL.
+A refused command is a stop condition, not permission to repair history
+manually or disable validation.
+
+### Verification and rollback planning
+
+Before approval, record the intended target, backup/restore procedure,
+migration versions, and responsible operator. After each authorized phase,
+inspect `philsms_schema_migrations` and the relevant tables; preserve the
+command output without disclosing credentials. Test idempotency only with
+separate approval if rerunning on staging.
+
+MySQL DDL is not generally transactionally reversible. There is **no
+automatic rollback command** for these migrations; recovery requires an
+operator-approved restoration plan using the verified backup. Do not
+experiment with destructive rollback SQL on a shared staging or production
+database.
+
+The CI workflow exercises these commands only against disposable local
+MySQL databases, with live SMS disabled. Passing CI does not constitute
+authorization to deploy or migrate a real staging installation.
+
 ## Testing
 
 RC2 development and browser verification were performed against a
