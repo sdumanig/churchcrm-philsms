@@ -5,64 +5,89 @@ namespace ChurchCRM\Plugins\PhilSMS;
 use Propel\Runtime\Propel;
 
 /**
- * Applies explicitly registered PhilSMS schema migrations.
+ * Runs reviewed, single-statement, idempotent PhilSMS schema migrations.
  *
- * Migration SQL must contain a single statement. MySQL DDL is not
- * transaction-safe; successful execution is recorded separately.
- * Do not use this runner for the existing RC2 bootstrap migrations.
+ * MySQL DDL implicitly commits. A migration must be safe to execute again
+ * if its DDL succeeded but recording its version was interrupted.
  */
 final class MigrationRunner
 {
     private const HISTORY_TABLE = 'philsms_schema_migrations';
+    private const LOCK_NAME = 'philsms_schema_migrations';
+    private const LOCK_TIMEOUT_SECONDS = 10;
 
     /**
-     * New migrations are registered here when their schema is reviewed.
+     * Explicit allowlist; existing RC2 bootstrap SQL is not replayed here.
      *
-     * @var array<string, string> Version => relative SQL filename
+     * @var array<string, string>
      */
     private const MIGRATIONS = [];
 
     public static function run(): void
     {
         $connection = Propel::getWriteConnection('default');
+        $lock = $connection->prepare('SELECT GET_LOCK(?, ?)');
+        $lock->execute([self::LOCK_NAME, self::LOCK_TIMEOUT_SECONDS]);
 
-        $connection->exec(
-            'CREATE TABLE IF NOT EXISTS ' . self::HISTORY_TABLE . ' (
-                version VARCHAR(100) NOT NULL,
-                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (version)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-        );
+        if ((int) $lock->fetchColumn() !== 1) {
+            throw new \RuntimeException('Unable to acquire PhilSMS migration lock.');
+        }
 
-        foreach (self::MIGRATIONS as $version => $filename) {
-            $statement = $connection->prepare(
-                'SELECT version FROM ' . self::HISTORY_TABLE .
-                ' WHERE version = ?'
+        try {
+            $connection->exec(
+                'CREATE TABLE IF NOT EXISTS ' . self::HISTORY_TABLE . ' (
+                    version VARCHAR(100) NOT NULL,
+                    checksum CHAR(64) NOT NULL,
+                    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (version)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
             );
-            $statement->execute([$version]);
 
-            if ($statement->fetchColumn() !== false) {
-                continue;
-            }
+            foreach (self::MIGRATIONS as $version => $filename) {
+                if (!preg_match('/\A[a-zA-Z0-9_-]+\z/D', $version)
+                    || !preg_match('/\A[0-9]{3}_[a-zA-Z0-9_-]+\.sql\z/D', $filename)) {
+                    throw new \RuntimeException('Invalid PhilSMS migration registration.');
+                }
 
-            $path = __DIR__ . '/../migrations/' . $filename;
-            $sql = file_get_contents($path);
+                $path = __DIR__ . '/../migrations/' . $filename;
+                $sql = file_get_contents($path);
 
-            if ($sql === false || trim($sql) === '') {
-                throw new \RuntimeException(
-                    'PhilSMS migration file is missing or empty: ' . $version
+                if ($sql === false || trim($sql) === '') {
+                    throw new \RuntimeException(
+                        'PhilSMS migration file is missing or empty: ' . $version
+                    );
+                }
+
+                $checksum = hash('sha256', $sql);
+                $statement = $connection->prepare(
+                    'SELECT checksum FROM ' . self::HISTORY_TABLE .
+                    ' WHERE version = ?'
                 );
+                $statement->execute([$version]);
+                $existingChecksum = $statement->fetchColumn();
+
+                if ($existingChecksum !== false) {
+                    if (!hash_equals((string) $existingChecksum, $checksum)) {
+                        throw new \RuntimeException(
+                            'Previously applied PhilSMS migration has changed: ' . $version
+                        );
+                    }
+                    continue;
+                }
+
+                // The SQL must be one independently idempotent statement.
+                // If DDL succeeds but the INSERT fails, a later run retries it.
+                $connection->exec($sql);
+
+                $insert = $connection->prepare(
+                    'INSERT INTO ' . self::HISTORY_TABLE .
+                    ' (version, checksum) VALUES (?, ?)'
+                );
+                $insert->execute([$version, $checksum]);
             }
-
-            // MySQL DDL implicitly commits. Each migration must be
-            // independently idempotent to recover from interrupted runs.
-            $connection->exec($sql);
-
-            $insert = $connection->prepare(
-                'INSERT INTO ' . self::HISTORY_TABLE .
-                ' (version) VALUES (?)'
-            );
-            $insert->execute([$version]);
+        } finally {
+            $release = $connection->prepare('SELECT RELEASE_LOCK(?)');
+            $release->execute([self::LOCK_NAME]);
         }
     }
 }
