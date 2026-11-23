@@ -25,6 +25,7 @@ jobs:
         run: |
           php -l src/PhilSMSPlugin.php
           php -l tests/activation-migration-contract.php
+          php -l tools/rc3-migration-preflight.php
           php -l src/LeaderRepository.php
           php -l src/MigrationRunner.php
           php -l tests/leader-repository-unit.php
@@ -41,6 +42,10 @@ jobs:
           php -l src/AssignmentService.php
           php -l tests/assignment-service-integration.php
           php -l tests/assignment-route-mysql-integration.php
+      - name: Validate reviewed RC3 migration manifest
+        run: |
+          php tools/rc3-migration-preflight.php
+          php tools/rc3-migration-preflight.php --json | php -r '$m=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR); if (($m["mode"] ?? "") !== "read-only" || count($m["migrations"] ?? []) !== 3) exit(1);'
       - name: Verify activation migration ordering
         run: php tests/activation-migration-contract.php
       - name: Check assignment route security contract
