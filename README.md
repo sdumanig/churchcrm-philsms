@@ -1,12 +1,15 @@
 # PhilSMS Messaging for ChurchCRM
 
-**Version:** 1.0.0-rc2 (release candidate)
+**Published plugin metadata version:** 1.0.0-rc2 (release candidate)
+**Current development branch:** RC3 leader-assignment and schema-migration work (unreleased)
 **Maintained by:** SDGTech Team of Soli Deo Gloria Christian Church–Davao City
 
 PhilSMS is a community plugin integrating SMS messaging with ChurchCRM.
 
-This release candidate has been tested on a staging installation of
-**ChurchCRM 7.8.6**. It is not yet an approved ChurchCRM community-registry
+The RC2 release candidate was tested on a staging installation of
+**ChurchCRM 7.8.6**. ChurchCRM **7.8.7** is the current RC3 development
+target; the RC3 migration tests run against disposable MySQL and real Perpl
+in CI, not against a ChurchCRM 7.8.7 staging deployment. It is not yet an approved ChurchCRM community-registry
 plugin, and live SMS delivery has not been verified against a production
 PhilSMS account.
 
@@ -38,8 +41,9 @@ PhilSMS account.
 Automatic preparation does not save a draft or send an SMS. Existing
 nonempty drafts are preserved.
 
-The Assigned Leader Follow-up template is reserved for the upcoming
-leader-assignment feature.
+The Assigned Leader Follow-up template is reserved in RC2. Leader registry,
+assignment, and activity functionality is being developed on the RC3 branch;
+it is not part of the published RC2 release candidate.
 
 ### Approval Notifications
 
@@ -68,7 +72,9 @@ leader-assignment feature.
 - **Person Timeline SMS history:** Full SMS message and delivery details
   recorded in the relevant ChurchCRM person's timeline.
 
-These features are not included in RC2.
+These features are not included in the published RC2 release candidate.
+RC3 leader-assignment implementation remains unreleased and requires further
+review before staging deployment.
 
 ## Installation and Configuration
 
@@ -181,7 +187,10 @@ authorization to deploy or migrate a real staging installation.
 ## Testing
 
 RC2 development and browser verification were performed against a
-staging ChurchCRM 7.8.6 installation.
+staging ChurchCRM 7.8.6 installation. Separately, RC3 development CI tests
+exercise migration safety and leader-assignment components using disposable
+MySQL databases and Perpl; they do not establish end-to-end staging
+compatibility with ChurchCRM 7.8.7.
 
 The existing seven-script regression suite passed **86 assertions with
 zero failures**. Tests cover authorization, confirmation, notification
@@ -207,7 +216,11 @@ These tests do not establish successful live SMS delivery.
 
 ## Compatibility
 
-**Tested:** ChurchCRM 7.8.6.
+**RC2 staging-tested:** ChurchCRM 7.8.6.
+
+**RC3 development target:** ChurchCRM 7.8.7. The current RC3 branch has
+passed isolated CI tests but has not been deployed to the 7.8.7 staging
+installation as part of this development workflow.
 
 Other ChurchCRM versions have not been verified for this release
 candidate. The `minimumCRMVersion` value in `plugin.json` is metadata,
