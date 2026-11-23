@@ -18,15 +18,89 @@ $live = ($liveSendingEnabled === true);
 <div class="container py-3">
     <h2>PhilSMS Messaging</h2>
 
+    <!-- PhilSMS five-tab navigation -->
+    <ul class="nav nav-tabs mb-4"
+        id="philsms-management-tabs"
+        role="tablist">
+
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active"
+                    id="philsms-people-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#philsms-people-panel"
+                    type="button" role="tab"
+                    aria-controls="philsms-people-panel"
+                    aria-selected="true">
+                Select ChurchCRM People
+            </button>
+        </li>
+
+        <li class="nav-item" role="presentation">
+            <button class="nav-link"
+                    id="philsms-leaders-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#philsms-leaders-panel"
+                    type="button" role="tab"
+                    aria-controls="philsms-leaders-panel"
+                    aria-selected="false">
+                Assign to a Leader
+            </button>
+        </li>
+
+        <li class="nav-item" role="presentation">
+            <button class="nav-link"
+                    id="philsms-templates-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#philsms-templates-panel"
+                    type="button" role="tab"
+                    aria-controls="philsms-templates-panel"
+                    aria-selected="false">
+                Message Templates
+            </button>
+        </li>
+
+        <li class="nav-item" role="presentation">
+            <button class="nav-link"
+                    id="philsms-notifications-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#philsms-notifications-panel"
+                    type="button" role="tab"
+                    aria-controls="philsms-notifications-panel"
+                    aria-selected="false">
+                Approval Notifications
+                <?php if (
+                    empty($pendingApprovalCountError)
+                    && (int) ($pendingApprovalCount ?? 0) > 0
+                ): ?>
+                    <span class="badge bg-warning text-dark ms-1"
+                          title="ChurchCRM registrations awaiting approval"
+                          aria-label="<?= (int) $pendingApprovalCount ?> registrations awaiting approval">
+                        <?= (int) $pendingApprovalCount ?>
+                    </span>
+                <?php endif; ?>
+            </button>
+        </li>
+
+        <li class="nav-item" role="presentation">
+            <button class="nav-link"
+                    id="philsms-settings-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#philsms-settings-panel"
+                    type="button" role="tab"
+                    aria-controls="philsms-settings-panel"
+                    aria-selected="false">
+                Settings
+            </button>
+        </li>
+    </ul>
+
+    <div id="philsms-operational-status">
     <div class="alert alert-info">
         Mode:
         <strong>
             <?= $live ? 'LIVE — messages cost credits'
                       : 'DRY RUN — no messages sent' ?>
         </strong>
-        <br>
-        API token:
-        <?= $configured ? 'configured' : 'missing' ?>
     </div>
 
     <div class="alert alert-light border mb-3">
@@ -69,6 +143,117 @@ $live = ($liveSendingEnabled === true);
             <?php endif; ?>
         <?php endif; ?>
     </div>
+
+    </div>
+
+    <!-- Shared PhilSMS tab content -->
+    <div class="tab-content" id="philsms-management-content">
+
+    <!-- Message Templates tab panel -->
+    <div class="tab-pane fade"
+         id="philsms-templates-panel"
+         role="tabpanel"
+         aria-labelledby="philsms-templates-tab"
+         tabindex="0">
+
+    <!-- PhilSMS message templates: read-only -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <strong>Message Templates</strong>
+            <span class="text-muted ms-2">(Read-only)</span>
+        </div>
+
+        <div class="card-body">
+            <?php if (!empty($messageTemplatesError)): ?>
+                <div class="alert alert-warning">
+                    <?= htmlspecialchars(
+                        $messageTemplatesError,
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ) ?>
+                </div>
+            <?php elseif (empty($messageTemplates)): ?>
+                <p class="text-muted mb-0">
+                    No message templates have been configured.
+                </p>
+            <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Template</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Message</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($messageTemplates as $template): ?>
+                                <tr>
+                                    <td>
+                                        <?= htmlspecialchars(
+                                            (string) $template['template_name'],
+                                            ENT_QUOTES,
+                                            'UTF-8'
+                                        ) ?>
+                                    </td>
+                                    <td>
+                                        <code><?= htmlspecialchars(
+                                            (string) $template['template_key'],
+                                            ENT_QUOTES,
+                                            'UTF-8'
+                                        ) ?></code>
+                                    </td>
+                                    <td>
+                                        <?= (int) $template['is_enabled'] === 1
+                                            ? 'Enabled'
+                                            : 'Disabled' ?>
+                                    </td>
+                                    <td style="white-space: pre-line;">
+                                        <?= htmlspecialchars(
+                                            (string) $template['message_body'],
+                                            ENT_QUOTES,
+                                            'UTF-8'
+                                        ) ?>
+                                    </td>
+                                    <td>
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-primary btn-sm philsms-edit-template"
+                                            data-template-key="<?= htmlspecialchars(
+                                                (string) $template['template_key'],
+                                                ENT_QUOTES,
+                                                'UTF-8'
+                                            ) ?>"
+                                            disabled>
+                                            Edit
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small text-muted mb-0">
+                    Personalization placeholders include
+                    {first_name}, {family_name}, {guest_name},
+                    {leader_name}, and {church_name}.
+                    Template editing will be added separately.
+                </p>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    </div>
+    <!-- End Message Templates tab panel -->
+
+    <!-- Approval Notifications tab panel -->
+    <div class="tab-pane fade"
+         id="philsms-notifications-panel"
+         role="tabpanel"
+         aria-labelledby="philsms-notifications-tab"
+         tabindex="0">
 
     <!-- PhilSMS approval notification queue -->
     <div class="card mb-4">
@@ -225,6 +410,16 @@ $live = ($liveSendingEnabled === true);
         </div>
     </div>
 
+    </div>
+    <!-- End Approval Notifications tab panel -->
+
+    <!-- Select ChurchCRM People tab panel -->
+    <div class="tab-pane fade show active"
+         id="philsms-people-panel"
+         role="tabpanel"
+         aria-labelledby="philsms-people-tab"
+         tabindex="0">
+
     <form method="post"
           action="<?= $base ?>/plugins/philsms/send"
           id="philsms-form">
@@ -359,9 +554,262 @@ $live = ($liveSendingEnabled === true);
         Administrators only. Confirm recipient consent before
         sending. Maximum 25 recipients per submission.
     </p>
+    </div>
+    <!-- End Select ChurchCRM People tab panel -->
+
+    <!-- Assign to a Leader tab panel -->
+    <div class="tab-pane fade"
+         id="philsms-leaders-panel"
+         role="tabpanel"
+         aria-labelledby="philsms-leaders-tab"
+         tabindex="0">
+        <div class="card mb-4">
+            <div class="card-header">
+                <strong>Assign to a Leader</strong>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-0">
+                    ChurchCRM leader selection and assignment
+                    will be configured here. A maximum of seven
+                    leaders may be selected.
+                </p>
+            </div>
+        </div>
+    </div>
+    <!-- End Assign to a Leader tab panel -->
+
+    <!-- Settings tab panel -->
+    <div class="tab-pane fade"
+         id="philsms-settings-panel"
+         role="tabpanel"
+         aria-labelledby="philsms-settings-tab"
+         tabindex="0">
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <strong>Plugin Information</strong>
+                <span class="text-muted ms-2">(Read-only)</span>
+            </div>
+            <div class="card-body">
+                <?php if (!empty($pluginMetadataError)): ?>
+                    <div class="alert alert-warning">
+                        <?= htmlspecialchars(
+                            $pluginMetadataError,
+                            ENT_QUOTES,
+                            'UTF-8'
+                        ) ?>
+                    </div>
+                <?php else: ?>
+                    <dl class="row mb-0">
+                        <?php
+                        $metadataLabels = [
+                            'name' => 'Plugin Name',
+                            'version' => 'Version',
+                            'author' => 'Developer',
+                            'description' => 'Description',
+                            'type' => 'Plugin Type',
+                            'minimumCRMVersion' => 'Minimum ChurchCRM Version',
+                        ];
+                        ?>
+                        <?php foreach ($metadataLabels as $field => $label): ?>
+                            <dt class="col-sm-4">
+                                <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>
+                            </dt>
+                            <dd class="col-sm-8">
+                                <?= htmlspecialchars(
+                                    (string) ($pluginMetadata[$field] ?? ''),
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?>
+                            </dd>
+                        <?php endforeach; ?>
+                    </dl>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <strong>SMS Configuration</strong>
+                <span class="text-muted ms-2">(Read-only)</span>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">PhilSMS API Key</dt>
+                    <dd class="col-sm-8">
+                        <?php if (!empty($safeSettings['apiKeyConfigured'])): ?>
+                            <span class="text-success">Configured</span>
+                        <?php else: ?>
+                            <span class="text-warning">Missing</span>
+                        <?php endif; ?>
+                        <div class="small text-muted">
+                            The API key is never displayed.
+                        </div>
+                    </dd>
+
+                    <dt class="col-sm-4">Sender ID</dt>
+                    <dd class="col-sm-8">
+                        <?= htmlspecialchars(
+                            (string) ($safeSettings['senderId'] ?: 'Not configured'),
+                            ENT_QUOTES,
+                            'UTF-8'
+                        ) ?>
+                    </dd>
+
+                    <dt class="col-sm-4">Plugin Manager Live Sending</dt>
+                    <dd class="col-sm-8">
+                        <?= !empty($safeSettings['liveSendingRequested'])
+                            ? 'Enabled'
+                            : 'Disabled' ?>
+                    </dd>
+
+                    <dt class="col-sm-4">Server Live Sending Authorization</dt>
+                    <dd class="col-sm-8">
+                        <?= !empty($safeSettings['serverLiveSendingAllowed'])
+                            ? 'Enabled'
+                            : 'Disabled' ?>
+                    </dd>
+
+                    <dt class="col-sm-4">Effective Sending Mode</dt>
+                    <dd class="col-sm-8">
+                        <strong>
+                            <?= !empty($safeSettings['effectiveLiveSending'])
+                                ? 'LIVE'
+                                : 'DRY RUN' ?>
+                        </strong>
+                    </dd>
+                </dl>
+
+                <p class="small text-muted mt-3 mb-0">
+                    Live SMS sending requires both the Plugin Manager
+                    setting and server authorization. Configuration
+                    changes are managed through ChurchCRM Plugin Manager.
+                </p>
+            </div>
+        </div>
+    </div>
+    <!-- End Settings tab panel -->
+
+    </div>
+    <!-- End shared PhilSMS tab content -->
+
 </div>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const status = document.getElementById('philsms-operational-status');
+    const tabs = document.getElementById('philsms-management-tabs');
+
+    if (!status || !tabs) {
+        return;
+    }
+
+    function updateStatusVisibility() {
+        const activeTab = tabs.querySelector('.nav-link.active');
+
+        status.hidden = activeTab !== null
+            && activeTab.id === 'philsms-templates-tab';
+    }
+
+    tabs.addEventListener('shown.bs.tab', updateStatusVisibility);
+    updateStatusVisibility();
+});
+</script>
+
 <!-- Approval notification review: mode-aware, live delivery locked -->
+<!-- PhilSMS message template editor -->
+<div class="modal fade" id="philsms-template-editor-modal"
+     tabindex="-1" aria-labelledby="philsms-template-editor-title"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="philsms-template-editor-title">
+                    Edit Message Template
+                </h5>
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <form id="philsms-template-editor-form"
+                      data-save-url="<?= htmlspecialchars(
+                          $base . '/plugins/philsms/templates/save',
+                          ENT_QUOTES,
+                          'UTF-8'
+                      ) ?>">
+                    <input type="hidden"
+                           id="philsms-template-csrf"
+                           value="<?= htmlspecialchars(
+                               (string) $_SESSION['philsms_csrf'],
+                               ENT_QUOTES,
+                               'UTF-8'
+                           ) ?>">
+                    <input type="hidden" id="philsms-template-key">
+
+                    <div class="mb-3">
+                        <label for="philsms-template-name" class="form-label">
+                            Template Name
+                        </label>
+                        <input type="text" class="form-control"
+                               id="philsms-template-name"
+                               maxlength="120" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="philsms-template-body" class="form-label">
+                            SMS Message
+                        </label>
+                        <textarea class="form-control"
+                                  id="philsms-template-body"
+                                  rows="5" maxlength="1000"
+                                  required></textarea>
+                        <div id="philsms-template-sms-usage"
+                             class="small text-muted mt-1"
+                             role="status" aria-live="polite"></div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox"
+                               id="philsms-template-enabled">
+                        <label class="form-check-label"
+                               for="philsms-template-enabled">
+                            Template Enabled
+                        </label>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Personalized Preview</label>
+                        <div id="philsms-template-preview"
+                             class="border rounded p-3"
+                             style="white-space: pre-wrap; overflow-wrap: anywhere;"
+                             aria-live="polite"></div>
+                    </div>
+
+                    <p class="small text-muted">
+                        Supported placeholders: {first_name}, {last_name},
+                        {full_name}, {family_name}, {guest_name},
+                        {church_name}, {leader_name}, {service_schedule}.
+                    </p>
+
+                    <div id="philsms-template-result"
+                         role="status" aria-live="polite"></div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                        data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary"
+                        id="philsms-template-save" disabled>
+                    Save Template
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="philsms-notification-review-modal"
      tabindex="-1" aria-labelledby="philsms-review-title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -422,7 +870,14 @@ Explicit authorization is required.
     </div>
 </div>
 
+<script type="application/json" id="philsms-template-data"><?= json_encode(
+    $messageTemplates ?? [],
+    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS |
+    JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE |
+    JSON_THROW_ON_ERROR
+) ?></script>
 <script src="<?= $base ?>/plugins/community/philsms/assets/js/sms-segments.js"></script>
+<script src="<?= $base ?>/plugins/community/philsms/assets/js/message-template-editor.js?v=<?= (int) filemtime(__DIR__ . '/../assets/js/message-template-editor.js') ?>"></script>
 <script>
 (function () {
     'use strict';

@@ -4,6 +4,7 @@ use ChurchCRM\Plugin\AbstractPlugin;
 use ChurchCRM\Plugin\Hook\HookManager;
 use ChurchCRM\Plugin\Hooks;
 use ChurchCRM\Config\Menu\MenuItem;
+use ChurchCRM\Config\Menu\MenuCounter;
 use ChurchCRM\Authentication\AuthenticationManager;
 use ChurchCRM\Utils\LoggerUtils;
 final class PhilSMSPlugin extends AbstractPlugin {
@@ -68,7 +69,33 @@ final class PhilSMSPlugin extends AbstractPlugin {
  }
  public function menu(array $menus): array {
   if (!$this->isEnabled() || !AuthenticationManager::getCurrentUser()->isAdmin()) return $menus;
-  $menus['PhilSMS'] = new MenuItem('PhilSMS', 'plugins/philsms/manage', true, 'fa-comment-sms');
+
+  $menuItem = new MenuItem(
+   'PhilSMS',
+   'plugins/philsms/manage',
+   true,
+   'fa-comment-sms'
+  );
+
+  try {
+   $pendingCount = PendingApprovalCounter::count();
+
+   if ($pendingCount > 0) {
+    $menuItem->addCounter(new MenuCounter(
+     'philsmsPendingApprovals',
+     'bg-warning text-dark',
+     $pendingCount,
+     'ChurchCRM registrations awaiting approval'
+    ));
+   }
+  } catch (\Throwable $e) {
+   LoggerUtils::getAppLogger()->warning(
+    '[PhilSMS] Sidebar pending approval count unavailable',
+    ['exception' => get_class($e)]
+   );
+  }
+
+  $menus['PhilSMS'] = $menuItem;
   return $menus;
  }
  public function testWithSettings(array $settings): array {
@@ -128,6 +155,19 @@ final class PhilSMSPlugin extends AbstractPlugin {
   return $saved !== ''
    ? $saved
    : trim((string) getenv('PHILSMS_SENDER_ID'));
+ }
+
+ public function getSafeSettingsSummary(): array {
+  return [
+   'apiKeyConfigured' => $this->isConfigured(),
+   'senderId' => $this->getSenderId(),
+   'liveSendingRequested' =>
+    $this->getConfigValue('liveSending') === '1',
+   'serverLiveSendingAllowed' =>
+    getenv('PHILSMS_LIVE_SEND') === '1',
+   'effectiveLiveSending' =>
+    $this->isLiveSendingEnabled(),
+  ];
  }
 
  public function isLiveSendingEnabled(): bool {

@@ -2,6 +2,8 @@
 use ChurchCRM\Plugins\PhilSMS\PhilSMSPlugin;
 use ChurchCRM\Plugins\PhilSMS\PhilSMSClient;
 use ChurchCRM\Plugins\PhilSMS\NotificationQueue;
+use ChurchCRM\Plugins\PhilSMS\MessageTemplateRepository;
+use ChurchCRM\Plugins\PhilSMS\PendingApprovalCounter;
 use ChurchCRM\Plugins\PhilSMS\NotificationDeliveryService;
 use ChurchCRM\Plugins\PhilSMS\NotificationConfirmation;
 use ChurchCRM\Plugins\PhilSMS\LiveDeliveryAuthorization;
@@ -127,6 +129,83 @@ $app->get('/philsms/manage', function(
         }
     }
 
+    // Load configured message templates for the management page.
+    // Read-only: no template changes or SMS sending.
+    $messageTemplates = [];
+    $messageTemplatesError = null;
+
+    try {
+        $messageTemplates = MessageTemplateRepository::listAll();
+    } catch (\Throwable $e) {
+        error_log(
+            '[PhilSMS] Message template lookup failed: ' . get_class($e)
+        );
+        $messageTemplatesError = 'Message templates temporarily unavailable.';
+    }
+
+    // Read-only plugin metadata and non-sensitive configuration.
+    $pluginMetadata = [];
+    $pluginMetadataError = null;
+
+    try {
+        $metadataPath = __DIR__ . '/../plugin.json';
+        $metadataJson = file_get_contents($metadataPath);
+
+        if ($metadataJson === false) {
+            throw new \RuntimeException('Plugin metadata unavailable');
+        }
+
+        $metadata = json_decode(
+            $metadataJson,
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        if (!is_array($metadata)) {
+            throw new \RuntimeException('Invalid plugin metadata');
+        }
+
+        foreach ([
+            'name',
+            'version',
+            'author',
+            'description',
+            'type',
+            'minimumCRMVersion',
+        ] as $field) {
+            $value = $metadata[$field] ?? '';
+
+            $pluginMetadata[$field] = is_string($value)
+                ? $value
+                : '';
+        }
+    } catch (\Throwable $e) {
+        error_log(
+            '[PhilSMS] Plugin metadata lookup failed: ' .
+            get_class($e)
+        );
+        $pluginMetadataError = 'Plugin information unavailable.';
+    }
+
+    $safeSettings = $plugin->getSafeSettingsSummary();
+
+    // Count ChurchCRM self-registrations awaiting approval.
+    // Read-only: does not change approvals or SMS notifications.
+    $pendingApprovalCount = 0;
+    $pendingApprovalCountError = null;
+
+    try {
+        $pendingApprovalCount = PendingApprovalCounter::count();
+    } catch (\Throwable $e) {
+        error_log(
+            '[PhilSMS] Pending approval count failed: ' .
+            get_class($e)
+        );
+        $pendingApprovalCountError =
+            'Pending approval count temporarily unavailable.';
+    }
+
     $renderer = new PhpRenderer(__DIR__ . '/../views/');
 
     return $renderer->render($response, 'manage.php', [
@@ -140,8 +219,96 @@ $app->get('/philsms/manage', function(
         'notifications' => $notifications,
         'notificationsError' => $notificationsError,
         'recipientCandidates' => $recipientCandidates,
+        'messageTemplates' => $messageTemplates,
+        'messageTemplatesError' => $messageTemplatesError,
+        'pluginMetadata' => $pluginMetadata,
+        'pluginMetadataError' => $pluginMetadataError,
+        'safeSettings' => $safeSettings,
+        'pendingApprovalCount' => $pendingApprovalCount,
+        'pendingApprovalCountError' => $pendingApprovalCountError,
     ]);
 
+})->add(AdminRoleAuthMiddleware::class);
+
+/**
+ * Save a message template. Administrator-only; never sends SMS.
+ */
+$app->post('/philsms/templates/save', function (
+    Request $request,
+    Response $response
+): Response {
+    $data = (array) $request->getParsedBody();
+
+    $json = static function (
+        int $status,
+        array $payload
+    ) use ($response): Response {
+        $response->getBody()->write(json_encode(
+            $payload,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        ));
+
+        return $response
+            ->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8')
+            ->withHeader('Cache-Control', 'no-store');
+    };
+
+    if (session_status() !== PHP_SESSION_ACTIVE ||
+        !isset($_SESSION['philsms_csrf']) ||
+        !is_string($data['csrf'] ?? null) ||
+        !hash_equals(
+            $_SESSION['philsms_csrf'],
+            $data['csrf']
+        )) {
+        return $json(403, [
+            'success' => false,
+            'message' => 'Your session has expired or the security token is invalid.'
+        ]);
+    }
+
+    $key = $data['template_key'] ?? null;
+    $name = $data['template_name'] ?? null;
+    $body = $data['message_body'] ?? null;
+    $enabled = $data['is_enabled'] ?? null;
+
+    if (!is_string($key) ||
+        !is_string($name) ||
+        !is_string($body) ||
+        !in_array($enabled, ['0', '1'], true)) {
+        return $json(422, [
+            'success' => false,
+            'message' => 'Invalid template form data.'
+        ]);
+    }
+
+    try {
+        MessageTemplateRepository::save(
+            $key,
+            $name,
+            $body,
+            $enabled === '1'
+        );
+
+        return $json(200, [
+            'success' => true,
+            'message' => 'Message template saved. No SMS was sent.'
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        return $json(422, [
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    } catch (\Throwable $e) {
+        error_log(
+            '[PhilSMS] Template save failed: ' . get_class($e)
+        );
+
+        return $json(500, [
+            'success' => false,
+            'message' => 'Unable to save the message template.'
+        ]);
+    }
 })->add(AdminRoleAuthMiddleware::class);
 
 $app->post('/philsms/notifications/save-draft', function (
