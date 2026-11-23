@@ -592,7 +592,54 @@ $live = ($liveSendingEnabled === true);
                             </table>
                         </div>
                     <?php endif; ?>
-                    <h5>Designated leaders</h5>
+                    <h5>Assign an approval</h5>
+                    <p class="text-muted">Select the recorded approval, an active designated leader, and an eligible contact. Assignment does not send SMS.</p>
+                    <form id="philsms-assignment-form" method="post"
+                          action="<?= $base ?>plugins/philsms/assignments/create">
+                        <input type="hidden" name="csrf"
+                               value="<?= htmlspecialchars((string) $_SESSION['philsms_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="mb-3">
+                            <label class="form-label" for="philsms-assignment-event">Approval event</label>
+                            <select class="form-select" id="philsms-assignment-event" name="approval_queue_id" required>
+                                <option value="">Select approval</option>
+                                <?php foreach ($assignmentCandidates as $candidate): ?>
+                                    <?php if (!empty($assignmentContacts[(int) $candidate['approval_queue_id']])): ?>
+                                        <option value="<?= (int) $candidate['approval_queue_id'] ?>">
+                                            <?= htmlspecialchars((string) $candidate['event_type'], ENT_QUOTES, 'UTF-8') ?>
+                                            #<?= (int) $candidate['event_entity_id'] ?>
+                                            (event <?= (int) $candidate['approval_queue_id'] ?>)
+                                        </option>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="philsms-assignment-leader">Designated leader</label>
+                            <select class="form-select" id="philsms-assignment-leader" name="leader_id" required>
+                                <option value="">Select active leader</option>
+                                <?php foreach ($designatedLeaders as $leader): ?>
+                                    <?php if (!empty($leader['is_active'])): ?>
+                                        <option value="<?= (int) $leader['id'] ?>">
+                                            ChurchCRM person #<?= (int) $leader['person_id'] ?>
+                                        </option>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="philsms-assignment-contact">Eligible contact</label>
+                            <select class="form-select" id="philsms-assignment-contact" name="contact_person_id" required disabled>
+                                <option value="">Select an approval first</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Record assignment (no SMS)</button>
+                        <div id="philsms-assignment-result" class="mt-3" role="status" aria-live="polite"></div>
+                    </form>
+                    <script type="application/json" id="philsms-assignment-contacts-json"><?= json_encode(
+                        $assignmentContacts ?? [],
+                        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
+                    ) ?></script>
+                    <h5 class="mt-4">Designated leaders</h5>
                     <?php if (empty($designatedLeaders)): ?>
                         <p>No designated leaders are recorded.</p>
                     <?php else: ?>
@@ -615,6 +662,52 @@ $live = ($liveSendingEnabled === true);
             </div>
         </div>
     </div>
+    <script>
+    (() => {
+        const form = document.getElementById('philsms-assignment-form');
+        if (!form) return;
+        const eventSelect = document.getElementById('philsms-assignment-event');
+        const contactSelect = document.getElementById('philsms-assignment-contact');
+        const result = document.getElementById('philsms-assignment-result');
+        const choices = JSON.parse(document.getElementById('philsms-assignment-contacts-json').textContent);
+        eventSelect.addEventListener('change', () => {
+            contactSelect.replaceChildren(new Option('Select eligible contact', ''));
+            (choices[eventSelect.value] || []).forEach(person => {
+                contactSelect.add(new Option(person.name + ' (#' + person.id + ')', String(person.id)));
+            });
+            contactSelect.disabled = !eventSelect.value || !(choices[eventSelect.value] || []).length;
+        });
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (!form.reportValidity()) return;
+            const button = form.querySelector('button[type="submit"]');
+            button.disabled = true;
+            result.textContent = 'Recording assignment…';
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' },
+                    body: new FormData(form)
+                });
+                const data = await response.json();
+                result.textContent = data.message || 'Assignment request completed.';
+                result.className = response.ok && data.success
+                    ? 'alert alert-success mt-3' : 'alert alert-warning mt-3';
+                if (response.ok && data.success) {
+                    eventSelect.querySelector('option[value="' + eventSelect.value + '"]').remove();
+                    eventSelect.value = '';
+                    eventSelect.dispatchEvent(new Event('change'));
+                }
+            } catch (error) {
+                result.textContent = 'Unable to record assignment. Please try again.';
+                result.className = 'alert alert-danger mt-3';
+            } finally {
+                button.disabled = false;
+            }
+        });
+    })();
+    </script>
     <!-- End Assign to a Leader tab panel -->
 
     <!-- Settings tab panel -->
