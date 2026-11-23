@@ -145,6 +145,7 @@ jobs:
       PHILSMS_TEST_ALLOW_DDL: 'YES'
       PHILSMS_LIVE_SEND: '0'
       PHILSMS_RC3_STAGING: 'YES'
+      PHILSMS_TEST_DIAGNOSTICS: 'YES'
       PHILSMS_TEST_PERPL_AUTOLOAD: /tmp/philsms-rc32-perpl/vendor/autoload.php
     steps:
       - uses: actions/checkout@v5
