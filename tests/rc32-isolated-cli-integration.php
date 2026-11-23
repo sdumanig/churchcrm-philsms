@@ -11,7 +11,7 @@ if (getenv('PHILSMS_TEST_ALLOW_DDL') !== 'YES'
 }
 $database = $m[1];
 $port = preg_match('/(?:^|;)port=(\d+)(?:;|$)/', $dsn, $p) ? $p[1] : '3306';
-$autoload = realpath(__DIR__ . '/fixtures/rc32-real-perpl/vendor/autoload.php');
+$autoload = realpath(getenv('PHILSMS_TEST_PERPL_AUTOLOAD') ?: __DIR__ . '/fixtures/rc32-real-perpl/vendor/autoload.php');
 $script = realpath(__DIR__ . '/../tools/rc32-apply-isolated.php');
 if ($autoload === false || $script === false) throw new RuntimeException('Missing fixture or CLI.');
 $db = new PDO($dsn, getenv('PHILSMS_TEST_USER'), getenv('PHILSMS_TEST_PASSWORD'), [
