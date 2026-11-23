@@ -85,7 +85,7 @@ verify((int) $connection->query(
 MigrationRunner::run();
 verify((int) $connection->query(
     'SELECT COUNT(*) FROM philsms_schema_migrations'
-)->fetchColumn() === 2, 'Second run retains two recorded migrations');
+)->fetchColumn() === 3, 'Second run retains three recorded migrations');
 verify((int) $connection->query(
     "SELECT COUNT(*) FROM information_schema.tables
      WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
@@ -94,6 +94,10 @@ verify((int) $connection->query(
     "SELECT COUNT(*) FROM information_schema.tables
      WHERE table_schema = DATABASE() AND table_name = 'philsms_leader_assignments'"
 )->fetchColumn() === 1, 'Leader assignment table exists');
+verify((int) $connection->query(
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'philsms_assignment_activity'"
+)->fetchColumn() === 1, 'Assignment activity table exists');
 
 $lockName = 'philsms_schema_migrations';
 $lock = $second->prepare('SELECT GET_LOCK(?, 0)');
