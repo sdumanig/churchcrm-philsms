@@ -1,22 +1,20 @@
 <?php
 declare(strict_types=1);
 
-// Offline lifecycle contract: activation may initialize RC2, but must not
-// automatically apply RC3 migrations. This is a source-level check, not a
+// Offline lifecycle contract: activation must be schema-neutral and must not
+// automatically initialize RC2 or apply RC3 migrations. This is a source-level check, not a
 // real ChurchCRM lifecycle test.
 $source = file_get_contents(__DIR__ . '/../src/PhilSMSPlugin.php');
 if ($source === false) {
     throw new RuntimeException('Cannot read PhilSMS plugin.');
 }
-if (!preg_match('/function\\s+activate\\s*\\(\\s*\\)\\s*:\\s*void\\s*\\{(?<body>[^}]+)\\}/s', $source, $matches)) {
+if (!preg_match('/function\\s+activate\\s*\\(\\s*\\)\\s*:\\s*void\\s*\\{(?<body>[^}]*)\\}/s', $source, $matches)) {
     throw new RuntimeException('Activation method not found.');
 }
 $body = $matches['body'];
-if (!str_contains($body, 'NotificationQueue::initialize()')) {
-    throw new RuntimeException('RC2 notification queue initialization must be preserved.');
-}
-if (str_contains($body, 'MigrationRunner::run()')) {
-    throw new RuntimeException('RC3 migrations must not execute during plugin activation.');
+if (preg_match('/\\b(?:NotificationQueue::initialize|MigrationRunner::run)\\s*\\(/', $body)
+    || preg_match('/\\b(?:exec|query|prepare|enqueue)\\s*\\(/', $body)) {
+    throw new RuntimeException('Plugin activation must not initialize schema or enqueue messages.');
 }
 if (!str_contains($source, 'public function deactivate(): void {}') ||
     !str_contains($source, 'public function uninstall(): void {')) {
