@@ -16,7 +16,9 @@ $db = new PDO($dsn, getenv('PHILSMS_TEST_USER') ?: '', getenv('PHILSMS_TEST_PASS
 if ($db->query('SELECT DATABASE()')->fetchColumn() !== $dbname) {
     throw new RuntimeException('Scratch database mismatch.');
 }
-$db->exec('CREATE TABLE IF NOT EXISTS philsms_notification_queue (id BIGINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB');
+$queueSql = file_get_contents(__DIR__ . '/../migrations/001_notification_queue.sql');
+if ($queueSql === false) { throw new RuntimeException('Missing reviewed RC2 queue schema.'); }
+$db->exec($queueSql);
 $dir = sys_get_temp_dir() . '/philsms_rc3_cli_' . bin2hex(random_bytes(8));
 if (!mkdir($dir, 0700)) {
     throw new RuntimeException('Cannot create scratch bootstrap directory.');
