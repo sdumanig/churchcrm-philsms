@@ -1,0 +1,34 @@
+name: RC3 offline PHP checks
+
+on:
+  push:
+    branches:
+      - feature/rc3-leader-registry-migrations
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: none
+      - name: Lint RC3 PHP files
+        run: |
+          php -l src/LeaderRepository.php
+          php -l src/MigrationRunner.php
+          php -l tests/leader-repository-unit.php
+          php -l tests/migration-runner-unit.php
+          php -l tests/migration-runner-integration.php
+      - name: Run offline leader repository tests
+        run: php tests/leader-repository-unit.php
+      - name: Run offline migration runner contract checks
+        run: php tests/migration-runner-unit.php
