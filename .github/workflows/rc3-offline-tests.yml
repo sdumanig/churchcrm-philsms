@@ -27,6 +27,7 @@ jobs:
           php -l tests/activation-migration-contract.php
           php -l tools/rc3-migration-preflight.php
           php -l tools/rc3-apply-migrations.php
+          php -l tests/rc3-migration-cli-integration.php
           php -l src/LeaderRepository.php
           php -l src/MigrationRunner.php
           php -l tests/leader-repository-unit.php
@@ -73,7 +74,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: test_only_root_password
-          MYSQL_DATABASE: philsms_test_rc3
+          MYSQL_DATABASE: philsms_test_staging_rc3
           MYSQL_USER: philsms_test
           MYSQL_PASSWORD: test_only_password
         ports:
@@ -84,7 +85,7 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
-      PHILSMS_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=philsms_test_rc3;charset=utf8mb4
+      PHILSMS_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=philsms_test_staging_rc3;charset=utf8mb4
       PHILSMS_TEST_USER: philsms_test
       PHILSMS_TEST_PASSWORD: test_only_password
       PHILSMS_TEST_ALLOW_DDL: 'YES'
@@ -98,6 +99,8 @@ jobs:
           extensions: pdo_mysql
           coverage: none
           tools: none
+      - name: Exercise gated CLI migration against disposable MySQL
+        run: php tests/rc3-migration-cli-integration.php
       - name: Run isolated migration integration test
         run: php tests/migration-runner-integration.php
       - name: Run leader repository integration test
