@@ -32,3 +32,38 @@ jobs:
         run: php tests/leader-repository-unit.php
       - name: Run offline migration runner contract checks
         run: php tests/migration-runner-unit.php
+  mysql-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_root_password
+          MYSQL_DATABASE: philsms_test_rc3
+          MYSQL_USER: philsms_test
+          MYSQL_PASSWORD: test_only_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_only_root_password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      PHILSMS_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=philsms_test_rc3;charset=utf8mb4
+      PHILSMS_TEST_USER: philsms_test
+      PHILSMS_TEST_PASSWORD: test_only_password
+      PHILSMS_TEST_ALLOW_DDL: 'YES'
+      PHILSMS_LIVE_SEND: '0'
+    steps:
+      - uses: actions/checkout@v4.3.1
+      - name: Configure PHP 8.3 with PDO MySQL
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql
+          coverage: none
+          tools: none
+      - name: Run isolated migration integration test
+        run: php tests/migration-runner-integration.php
