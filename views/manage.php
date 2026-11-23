@@ -561,8 +561,7 @@ $live = ($liveSendingEnabled === true);
             </div>
             <div class="card-body">
                 <p class="text-muted">
-                    Read-only RC3 preview. Assignment creation is not yet enabled
-                    in this interface. No SMS is sent.
+                    Manage designated leaders and record follow-up assignments for approved guests. No SMS is sent.
                 </p>
                 <?php if (!empty($assignmentOverviewError)): ?>
                     <div class="alert alert-warning" role="status">
