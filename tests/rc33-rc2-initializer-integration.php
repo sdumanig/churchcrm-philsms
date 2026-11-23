@@ -75,4 +75,20 @@ if ($db->query("SELECT message_body FROM philsms_message_templates WHERE templat
     || (int) $db->query('SELECT COUNT(*) FROM philsms_notification_queue WHERE event_entity_id = 987654')->fetchColumn() !== 1) {
     throw new RuntimeException('RC2 reinitialization changed existing records.');
 }
+$history = $db->query("SELECT version, checksum FROM philsms_schema_migrations WHERE version LIKE '00%' ORDER BY version")->fetchAll(PDO::FETCH_ASSOC);
+if (count($history) !== 3) throw new RuntimeException('Expected three RC2 history entries.');
+foreach ($history as $row) {
+    $file = __DIR__ . '/../migrations/' . $row['version'] . '.sql';
+    if (!is_file($file) || !hash_equals(hash('sha256', (string) file_get_contents($file)), $row['checksum'])) {
+        throw new RuntimeException('RC2 migration history checksum invalid.');
+    }
+}
+$db->exec("UPDATE philsms_schema_migrations SET checksum = REPEAT('0', 64) WHERE version = '002_message_templates'");
+[$status, $out] = runRc2($script, $autoload, $database, $env);
+if ($status === 0 || !str_contains($out, 'REFUSED:')) {
+    throw new RuntimeException('Altered RC2 history was not rejected.');
+}
+if ($db->query("SELECT message_body FROM philsms_message_templates WHERE template_key = 'guest_general_welcome'")->fetchColumn() !== 'Custom preserved') {
+    throw new RuntimeException('Checksum refusal changed a customized template.');
+}
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
