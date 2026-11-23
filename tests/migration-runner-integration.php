@@ -74,7 +74,7 @@ function verify(bool $ok, string $description): void
     $passed++;
 }
 
-// The migration registry is currently empty. Only the history table is created.
+// The runner creates its history table and the designated leader registry.
 MigrationRunner::run();
 verify((int) $connection->query(
     "SELECT COUNT(*) FROM information_schema.tables
@@ -85,7 +85,11 @@ verify((int) $connection->query(
 MigrationRunner::run();
 verify((int) $connection->query(
     'SELECT COUNT(*) FROM philsms_schema_migrations'
-)->fetchColumn() === 0, 'Second run is idempotent with empty registry');
+)->fetchColumn() === 1, 'Second run retains one recorded migration');
+verify((int) $connection->query(
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
+)->fetchColumn() === 1, 'Leader registry table exists');
 
 $lockName = 'philsms_schema_migrations';
 $lock = $second->prepare('SELECT GET_LOCK(?, 0)');
