@@ -33,6 +33,7 @@ jobs:
           php -l tests/assignment-eligibility-integration.php
           php -l routes/routes.php
           php -l views/manage.php
+          php -l tests/assignment-overview-render.php
           php -l tests/assignment-route-contract.php
           php -l tests/assignment-route-behavior.php
           php -l src/AssignmentService.php
@@ -41,6 +42,8 @@ jobs:
         run: php tests/assignment-route-contract.php
       - name: Exercise assignment route request handling
         run: php tests/assignment-route-behavior.php
+      - name: Render RC3 assignment overview fixtures
+        run: php tests/assignment-overview-render.php
       - name: Run offline leader repository tests
         run: php tests/leader-repository-unit.php
       - name: Run offline migration runner contract checks
