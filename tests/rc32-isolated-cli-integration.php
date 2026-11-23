@@ -75,6 +75,19 @@ if ($historyExists === 1) {
         }
     }
 }
+// Reject incomplete RC2 history before applying any RC3 migration.
+$db->exec("DELETE FROM philsms_schema_migrations WHERE version = '002_message_templates'");
+[$status, $output] = invokeIsolated($script, $autoload, $database, []);
+if ($status === 0 || !str_contains($output, 'REFUSED:')) {
+    throw new RuntimeException('RC3 accepted incomplete RC2 history.');
+}
+if ((int) $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'")->fetchColumn() !== 0) {
+    throw new RuntimeException('RC3 DDL executed despite missing RC2 prerequisite.');
+}
+$rc2Sql = file_get_contents(__DIR__ . '/../migrations/002_message_templates.sql');
+if ($rc2Sql === false) throw new RuntimeException('RC2 checksum fixture missing.');
+$restore = $db->prepare('INSERT INTO philsms_schema_migrations (version, checksum) VALUES (?, ?)');
+$restore->execute(['002_message_templates', hash('sha256', $rc2Sql)]);
 foreach ([1, 2] as $attempt) {
     [$status, $output] = invokeIsolated($script, $autoload, $database, []);
     if ($status !== 0 || !str_contains($output, 'PASS: isolated RC3 migrations')) {
