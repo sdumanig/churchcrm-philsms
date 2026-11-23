@@ -12,7 +12,7 @@ use Propel\Runtime\Propel;
  * Administrator-maintained designated leaders, independent of ChurchCRM roles.
  *
  * The caller must also enforce route-level authorization and CSRF protection.
- * Writes check administrator privileges again as defense in depth.
+ * Writes derive actor identity from the authenticated administrator session.
  * No SMS is sent by this repository.
  */
 final class LeaderRepository
@@ -55,11 +55,10 @@ final class LeaderRepository
      * Designate an existing ChurchCRM person or reactivate their designation.
      * The unique person_id key makes repeated designation idempotent.
      */
-    public static function designate(int $personId, int $actorPersonId): void
+    public static function designate(int $personId): void
     {
-        self::requireAdmin();
+        $actorPersonId = self::currentAdminPersonId();
         self::validatePersonId($personId);
-        self::validatePersonId($actorPersonId);
         self::requireExistingPerson($personId);
 
         $connection = Propel::getWriteConnection('default');
@@ -78,11 +77,10 @@ final class LeaderRepository
      * Deactivate an existing leader; preserve their record for assignment history.
      * Returns false when no leader exists or no state change was necessary.
      */
-    public static function deactivate(int $personId, int $actorPersonId): bool
+    public static function deactivate(int $personId): bool
     {
-        self::requireAdmin();
+        $actorPersonId = self::currentAdminPersonId();
         self::validatePersonId($personId);
-        self::validatePersonId($actorPersonId);
 
         $connection = Propel::getWriteConnection('default');
         $statement = $connection->prepare(
@@ -102,6 +100,15 @@ final class LeaderRepository
         if ($user === null || !$user->isAdmin()) {
             throw new \RuntimeException('PhilSMS leader management requires administrator access.');
         }
+    }
+
+    private static function currentAdminPersonId(): int
+    {
+        self::requireAdmin();
+        $personId = (int) AuthenticationManager::getCurrentUser()->getId();
+        self::validatePersonId($personId);
+
+        return $personId;
     }
 
     private static function validatePersonId(int $personId): void
