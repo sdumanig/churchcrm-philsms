@@ -53,6 +53,14 @@ namespace {
             !str_contains($html, 'Designated leaders') ||
             !str_contains($html, '999') ||
             !str_contains($html, 'philsms-assignment-form') ||
+            !str_contains($html, 'id="philsms-leader-designation-form"') ||
+            !str_contains($html, '/plugins/philsms/leaders/designate') ||
+            !str_contains($html, 'name="person_id" type="number" min="1" step="1" required') ||
+            !str_contains($html, 'id="philsms-leader-designation-result"') ||
+            !str_contains($html, 'Save leader designation (no SMS)') ||
+            !str_contains($html, 'Maximum of seven') && !str_contains($html, 'Up to seven leaders') ||
+            !str_contains($html, 'Refresh leader list') ||
+            str_contains($html, 'Read-only RC3 preview.') ||
             !str_contains($html, '/plugins/philsms/assignments/create') ||
             !str_contains($html, 'Record assignment (no SMS)') ||
             !str_contains($html, 'Test Person') ||
@@ -62,7 +70,17 @@ namespace {
             !str_contains($html, 'row.remove()')) {
             throw new \RuntimeException('Populated overview missing expected records.');
         }
-        echo "PASS: populated overview renders\n";
+        echo "PASS: populated overview and leader designation form render\n";
+        if (!preg_match('/<form id="philsms-leader-designation-form"[\\s\\S]*?<\\/form>/', $html, $formMatch) ||
+            !str_contains($formMatch[0], 'name="csrf"') ||
+            !str_contains($formMatch[0], 'value="' . htmlspecialchars((string) ($_SESSION['philsms_csrf'] ?? ''), ENT_QUOTES, 'UTF-8') . '"') ||
+            !str_contains($html, "credentials: 'same-origin'") ||
+            !str_contains($html, "method: 'POST'") ||
+            !str_contains($html, 'button.disabled = true') ||
+            !str_contains($html, 'button.disabled = false')) {
+            throw new \\RuntimeException('Leader designation form security or submission contract missing.');
+        }
+        echo "PASS: designation form CSRF and submission contract\n";
 
         $html = renderOverview(
             [[
