@@ -74,7 +74,29 @@ function verify(bool $ok, string $description): void
     $passed++;
 }
 
-// The runner creates its history table and the designated leader registry.
+// Seed the complete RC2 prerequisite fixture before testing RC3.
+foreach (['001_notification_queue.sql', '002_message_templates.sql',
+          '003_default_message_templates.sql'] as $file) {
+    $sql = file_get_contents(__DIR__ . '/../migrations/' . $file);
+    if ($sql === false) throw new RuntimeException('Missing RC2 fixture.');
+    $connection->exec($sql);
+}
+$connection->exec('CREATE TABLE IF NOT EXISTS philsms_schema_migrations (
+    version VARCHAR(100) NOT NULL,
+    checksum CHAR(64) NOT NULL,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+foreach (['001_notification_queue', '002_message_templates',
+          '003_default_message_templates'] as $version) {
+    $sql = file_get_contents(__DIR__ . '/../migrations/' . $version . '.sql');
+    $record = $connection->prepare(
+        'INSERT INTO philsms_schema_migrations (version, checksum) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE checksum = VALUES(checksum)'
+    );
+    $record->execute([$version, hash('sha256', $sql)]);
+}
+// The runner must preserve RC2 history and add exactly three RC3 versions.
 MigrationRunner::run();
 verify((int) $connection->query(
     "SELECT COUNT(*) FROM information_schema.tables
@@ -85,7 +107,7 @@ verify((int) $connection->query(
 MigrationRunner::run();
 verify((int) $connection->query(
     'SELECT COUNT(*) FROM philsms_schema_migrations'
-)->fetchColumn() === 3, 'Second run retains three recorded migrations');
+)->fetchColumn() === 6, 'Second run retains three RC2 and three RC3 migrations');
 verify((int) $connection->query(
     "SELECT COUNT(*) FROM information_schema.tables
      WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
