@@ -94,4 +94,25 @@ if ($db->query("SELECT message_body FROM philsms_message_templates WHERE templat
 // Restore the disposable fixture so subsequent RC3 tests see valid RC2 history.
 $restore = $db->prepare('UPDATE philsms_schema_migrations SET checksum = ? WHERE version = ?');
 $restore->execute([hash('sha256', (string) file_get_contents(__DIR__ . '/../migrations/002_message_templates.sql')), '002_message_templates']);
+// Simulate a legacy RC2 installation whose compatible tables and edited
+// templates predate checksum history. Adoption must not replace user content.
+$db->exec("DELETE FROM philsms_schema_migrations WHERE version IN ('001_notification_queue', '002_message_templates', '003_default_message_templates')");
+if ((int) $db->query("SELECT COUNT(*) FROM philsms_schema_migrations WHERE version LIKE '00%'")->fetchColumn() !== 0) {
+    throw new RuntimeException('Could not prepare legacy RC2 fixture.');
+}
+[$status, $out] = runRc2($script, $autoload, $database, $env);
+if ($status !== 0) throw new RuntimeException('Legacy RC2 adoption failed: ' . $out);
+if ((int) $db->query("SELECT COUNT(*) FROM philsms_schema_migrations WHERE version IN ('001_notification_queue', '002_message_templates', '003_default_message_templates')")->fetchColumn() !== 3) {
+    throw new RuntimeException('Legacy RC2 adoption did not record all three migrations.');
+}
+if ($db->query("SELECT message_body FROM philsms_message_templates WHERE template_key = 'guest_general_welcome'")->fetchColumn() !== 'Custom preserved'
+    || (int) $db->query("SELECT COUNT(*) FROM philsms_notification_queue WHERE event_entity_id = 987654")->fetchColumn() !== 1) {
+    throw new RuntimeException('Legacy RC2 adoption changed existing data.');
+}
+foreach ($db->query("SELECT version, checksum FROM philsms_schema_migrations WHERE version LIKE '00%'")->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $sqlFile = __DIR__ . '/../migrations/' . $row['version'] . '.sql';
+    if (!hash_equals(hash('sha256', (string) file_get_contents($sqlFile)), (string) $row['checksum'])) {
+        throw new RuntimeException('Legacy RC2 adoption recorded incorrect checksum.');
+    }
+}
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
