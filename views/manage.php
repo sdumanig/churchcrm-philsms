@@ -569,6 +569,23 @@ $live = ($liveSendingEnabled === true);
                         <?= htmlspecialchars((string) $assignmentOverviewError, ENT_QUOTES, 'UTF-8') ?>
                     </div>
                 <?php else: ?>
+                    <h5>Designate a leader</h5>
+                    <p class="text-muted">Enter the ChurchCRM person ID of a leader. Up to seven leaders may be active. Entering an inactive leader's ID reactivates that designation.</p>
+                    <form id="philsms-leader-designation-form" method="post"
+                          action="<?= $base ?>/plugins/philsms/leaders/designate">
+                        <input type="hidden" name="csrf"
+                               value="<?= htmlspecialchars((string) $_SESSION['philsms_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="mb-3">
+                            <label class="form-label" for="philsms-leader-person-id">ChurchCRM person ID</label>
+                            <input class="form-control" id="philsms-leader-person-id"
+                                   name="person_id" type="number" min="1" step="1" required
+                                   inputmode="numeric">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save leader designation (no SMS)</button>
+                        <div id="philsms-leader-designation-result" class="mt-3"
+                             role="status" aria-live="polite"></div>
+                    </form>
+                    <hr class="my-4">
                     <h5>Unassigned approval events</h5>
                     <?php if (empty($assignmentCandidates)): ?>
                         <p>No unassigned approval events are recorded.</p>
@@ -670,6 +687,47 @@ $live = ($liveSendingEnabled === true);
             </div>
         </div>
     </div>
+    <script>
+    (() => {
+        const form = document.getElementById('philsms-leader-designation-form');
+        if (!form) return;
+        const result = document.getElementById('philsms-leader-designation-result');
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (!form.reportValidity()) return;
+            const button = form.querySelector('button[type="submit"]');
+            button.disabled = true;
+            result.textContent = 'Saving leader designation…';
+            result.className = 'mt-3';
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' },
+                    body: new FormData(form)
+                });
+                const data = await response.json();
+                result.textContent = data.message || 'Leader designation request completed.';
+                result.className = response.ok && data.success
+                    ? 'alert alert-success mt-3' : 'alert alert-warning mt-3';
+                if (response.ok && data.success) {
+                    form.reset();
+                    const reload = document.createElement('button');
+                    reload.type = 'button';
+                    reload.className = 'btn btn-sm btn-outline-primary ms-2';
+                    reload.textContent = 'Refresh leader list';
+                    reload.addEventListener('click', () => window.location.reload());
+                    result.appendChild(reload);
+                }
+            } catch (error) {
+                result.textContent = 'Unable to save leader designation. Please try again.';
+                result.className = 'alert alert-danger mt-3';
+            } finally {
+                button.disabled = false;
+            }
+        });
+    })();
+    </script>
     <script>
     (() => {
         const form = document.getElementById('philsms-assignment-form');
