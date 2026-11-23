@@ -579,9 +579,9 @@ $live = ($liveSendingEnabled === true);
                                     <th>Approval event</th><th>Type</th>
                                     <th>ChurchCRM record ID</th><th>Recorded at</th>
                                 </tr></thead>
-                                <tbody>
+                                <tbody id="philsms-unassigned-approval-rows">
                                 <?php foreach ($assignmentCandidates as $candidate): ?>
-                                    <tr>
+                                    <tr data-approval-queue-id="<?= (int) $candidate['approval_queue_id'] ?>">
                                         <td><?= (int) $candidate['approval_queue_id'] ?></td>
                                         <td><?= htmlspecialchars((string) $candidate['event_type'], ENT_QUOTES, 'UTF-8') ?></td>
                                         <td><?= (int) $candidate['event_entity_id'] ?></td>
@@ -703,7 +703,27 @@ $live = ($liveSendingEnabled === true);
                 result.className = response.ok && data.success
                     ? 'alert alert-success mt-3' : 'alert alert-warning mt-3';
                 if (response.ok && data.success) {
-                    eventSelect.querySelector('option[value="' + eventSelect.value + '"]').remove();
+                    const assignedEventId = eventSelect.value;
+                    const selectedOption = eventSelect.selectedOptions[0];
+                    if (selectedOption && selectedOption.value) selectedOption.remove();
+                    const approvalRows = document.getElementById('philsms-unassigned-approval-rows');
+                    if (approvalRows) {
+                        for (const row of approvalRows.querySelectorAll('tr[data-approval-queue-id]')) {
+                            if (row.dataset.approvalQueueId === assignedEventId) {
+                                row.remove();
+                                break;
+                            }
+                        }
+                        if (!approvalRows.querySelector('tr[data-approval-queue-id]')) {
+                            const emptyRow = document.createElement('tr');
+                            const emptyCell = document.createElement('td');
+                            emptyCell.colSpan = 4;
+                            emptyCell.textContent = 'No unassigned approval events remain in this list.';
+                            emptyRow.appendChild(emptyCell);
+                            approvalRows.appendChild(emptyRow);
+                        }
+                    }
+                    delete choices[assignedEventId];
                     eventSelect.value = '';
                     eventSelect.dispatchEvent(new Event('change'));
                 }
