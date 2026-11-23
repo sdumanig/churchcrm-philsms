@@ -54,7 +54,7 @@ namespace {
         $db->exec(file_get_contents(__DIR__ . '/../migrations/' . $migration . '.sql'));
     }
     require_once __DIR__ . '/../src/AssignmentService.php';
-    foreach ([901, 902, 7001, 7002, 8001, 8002] as $id) {
+    foreach ([9901, 902, 7001, 7002, 8001, 8002] as $id) {
         PersonQuery::$people[$id] = new class($id) {
             public function __construct(private int $id) {}
             public function getId(): int { return $this->id; }
@@ -76,7 +76,7 @@ namespace {
         try { $fn(); } catch (\Throwable $e) { check(true, $label); return; }
         throw new \RuntimeException('FAIL: ' . $label);
     }
-    $db->exec('INSERT INTO philsms_leaders (person_id, created_by) VALUES (901, 902)');
+    $db->exec('INSERT INTO philsms_leaders (person_id, created_by) VALUES (9901, 902)');
     $leader = (int) $db->lastInsertId();
     $event = $db->prepare(
         'INSERT INTO philsms_notification_queue
