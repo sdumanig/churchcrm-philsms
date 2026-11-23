@@ -96,6 +96,23 @@ foreach (['001_notification_queue', '002_message_templates',
     );
     $record->execute([$version, hash('sha256', $sql)]);
 }
+// Incompatible RC2 schema must be refused before creating any RC3 tables.
+$connection->exec("ALTER TABLE philsms_notification_queue ALTER COLUMN status SET DEFAULT 'sent'");
+try {
+    MigrationRunner::run();
+    throw new RuntimeException('FAIL: RC3 accepted incompatible RC2 default');
+} catch (RuntimeException $e) {
+    if ($e->getMessage() !== 'RC2 prerequisite default incompatible.') {
+        throw $e;
+    }
+} finally {
+    $connection->exec("ALTER TABLE philsms_notification_queue ALTER COLUMN status SET DEFAULT 'pending'");
+}
+verify((int) $connection->query(
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
+)->fetchColumn() === 0, 'Invalid RC2 default blocks RC3 DDL');
+
 // The runner must preserve RC2 history and add exactly three RC3 versions.
 MigrationRunner::run();
 verify((int) $connection->query(
