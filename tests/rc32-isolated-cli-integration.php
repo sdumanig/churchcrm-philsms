@@ -57,15 +57,23 @@ foreach ([
         throw new RuntimeException('Unsafe invocation was not refused.');
     }
 }
-// The disposable database must not carry RC3 history before the first authorized run.
+// RC2 history (001-003) is expected after the initializer test. RC3
+// history (004-006) must be absent before the first authorized RC3 run.
 $historyExists = (int) $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'philsms_schema_migrations'")->fetchColumn();
 if ($historyExists === 1) {
-    $rows = $db->query('SELECT version, checksum FROM philsms_schema_migrations')->fetchAll(PDO::FETCH_ASSOC);
-    $summary = [];
+    $rows = $db->query("SELECT version, checksum FROM philsms_schema_migrations")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $row) {
-        $summary[] = (string) $row['version'] . ':' . (hash_equals((string) $row['checksum'], hash('sha256', (string) file_get_contents(__DIR__ . '/../migrations/' . $row['version'] . '.sql'))) ? 'match' : 'mismatch');
+        $version = (string) $row['version'];
+        if (preg_match('/\\A00[456]_/', $version)) {
+            throw new RuntimeException('Unexpected preexisting RC3 migration history.');
+        }
+        if (preg_match('/\\A00[123]_/', $version)) {
+            $path = __DIR__ . '/../migrations/' . $version . '.sql';
+            if (!is_file($path) || !hash_equals(hash('sha256', (string) file_get_contents($path)), (string) $row['checksum'])) {
+                throw new RuntimeException('Invalid RC2 migration history fixture.');
+            }
+        }
     }
-    throw new RuntimeException('Unexpected preexisting RC3 migration history: ' . implode(',', $summary));
 }
 foreach ([1, 2] as $attempt) {
     [$status, $output] = invokeIsolated($script, $autoload, $database, []);
@@ -73,7 +81,7 @@ foreach ([1, 2] as $attempt) {
         throw new RuntimeException('Isolated CLI attempt ' . $attempt . ' failed: ' . $output);
     }
 }
-if ((int) $db->query('SELECT COUNT(*) FROM philsms_schema_migrations')->fetchColumn() !== 3) {
+if ((int) $db->query('SELECT COUNT(*) FROM philsms_schema_migrations WHERE version IN ('004_leader_registry', '005_leader_assignments', '006_assignment_activity')')->fetchColumn() !== 3) {
     throw new RuntimeException('Expected three recorded RC3 migrations.');
 }
 echo "PASS: real-Perpl isolated migration CLI, refusals, idempotency and history\n";
