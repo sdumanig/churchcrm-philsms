@@ -70,7 +70,7 @@ final class MigrationRunner
                 $statement->execute([$version]);
                 $existingChecksum = $statement->fetchColumn();
 
-                if ($existingChecksum !== false) {
+                if ($existingChecksum !== false && $existingChecksum !== null) {
                     if (!hash_equals((string) $existingChecksum, $checksum)) {
                         throw new \RuntimeException(
                             'Previously applied PhilSMS migration has changed: ' . $version
