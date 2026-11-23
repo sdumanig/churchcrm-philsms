@@ -14,7 +14,7 @@ if (PHP_VERSION_ID < 80400 || getenv('PHILSMS_TEST_ALLOW_DDL') !== 'YES') {
     throw new RuntimeException('PHP 8.4 and disposable database authorization required.');
 }
 $dsn = getenv('PHILSMS_TEST_DSN') ?: '';
-if (!preg_match('/(?:^|;)host=([^;]+)(?:;|$)/', $dsn, $hostMatch)
+if (!preg_match('/\\Amysql:host=([^;]+)(?:;|$)/', $dsn, $hostMatch)
     || !preg_match('/(?:^|;)dbname=(philsms_test_staging_[a-zA-Z0-9_]+)(?:;|$)/', $dsn, $dbMatch)) {
     throw new RuntimeException('Refusing non-disposable database configuration.');
 }
