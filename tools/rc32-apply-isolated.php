@@ -64,7 +64,13 @@ try {
     require_once __DIR__ . '/../src/MigrationRunner.php';
     \ChurchCRM\Plugins\PhilSMS\MigrationRunner::run();
 } catch (\Throwable $e) {
-    // Never print database credentials, DSN or full exception text.
+    // CI-only diagnostics: never expose credentials, DSNs or arbitrary exception text.
+    if (getenv('PHILSMS_TEST_DIAGNOSTICS') === 'YES'
+        && getenv('PHILSMS_TEST_ALLOW_DDL') === 'YES'
+        && $host === '127.0.0.1'
+        && str_starts_with($database, 'philsms_test_staging_')) {
+        fwrite(STDERR, 'CI DIAGNOSTIC: ' . get_class($e) . ' (code ' . (int) $e->getCode() . ')\\n');
+    }
     isolatedRefuse('Isolated migration aborted; consult protected server logs.');
 }
 echo "PASS: isolated RC3 migrations applied/verified on explicitly named staging database.\n";
