@@ -219,6 +219,27 @@ $app->get('/philsms/manage', function(
         $assignmentOverviewError = 'Assignment overview unavailable until RC3 database migrations are applied.';
     }
 
+    // Enrich designated leaders with current ChurchCRM display names.
+    // Person IDs remain the stable identifiers used by the assignment service.
+    if ($assignmentOverviewError === null) {
+        foreach ($designatedLeaders as &$leaderRow) {
+            $leaderRow['display_name'] = 'ChurchCRM person #' . (int) $leaderRow['person_id'];
+            try {
+                $leaderPerson = PersonQuery::create()->findPk((int) $leaderRow['person_id']);
+                if ($leaderPerson !== null) {
+                    $fullName = trim((string) $leaderPerson->getFirstName() . ' ' .
+                        (string) $leaderPerson->getLastName());
+                    if ($fullName !== '') {
+                        $leaderRow['display_name'] = $fullName;
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('[PhilSMS] Leader display lookup failed: ' . get_class($e));
+            }
+        }
+        unset($leaderRow);
+    }
+
     // Resolve contact choices for display; AssignmentService independently
     // revalidates the selected contact during the write transaction.
     $assignmentContacts = [];
