@@ -51,8 +51,8 @@ ChurchCRM's normal application bootstrap can initialize sessions, check database
 versions, and perform other application work before a migration script can verify
 its target. Therefore, **do not use** `src/Include/Config.php`,
 `src/Include/LoadConfigs.php`, or any arbitrary ChurchCRM bootstrap as a
-migration entry point. The older `tools/rc3-apply-migrations.php` is
-**deprecated and must not be executed**; its retirement is tracked separately.
+migration entry point. The older bootstrap-based CLI was **removed** from
+this feature branch after the isolated CLI passed integration testing.
 
 The supported RC3 migration candidate is `tools/rc32-apply-isolated.php`.
 It uses the reviewed ChurchCRM `vendor/autoload.php` (not the application
