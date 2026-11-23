@@ -50,7 +50,7 @@ try {
     // Hold the advisory lock throughout preflight and DDL so concurrent
     // initializer processes cannot both inspect an absent table.
     $lock = $db->prepare('SELECT GET_LOCK(?, 10)');
-    $lock->execute(['philsms_rc2_initialize']);
+    $lock->execute(['philsms_schema_migrations']);
     if ((int) $lock->fetchColumn() !== 1) {
         throw new RuntimeException('RC2 initialization lock unavailable.');
     }
@@ -260,7 +260,7 @@ try {
         }
     } finally {
         $release = $db->prepare('SELECT RELEASE_LOCK(?)');
-        $release->execute(['philsms_rc2_initialize']);
+        $release->execute(['philsms_schema_migrations']);
     }
 } catch (\Throwable $e) {
     rc2Refuse('RC2 initialization aborted; review protected operator logs and schema.');
