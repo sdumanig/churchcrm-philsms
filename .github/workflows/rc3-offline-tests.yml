@@ -96,6 +96,7 @@ jobs:
       PHILSMS_TEST_USER: philsms_test
       PHILSMS_TEST_PASSWORD: test_only_password
       PHILSMS_TEST_ALLOW_DDL: 'YES'
+      PHILSMS_TEST_DIAGNOSTICS: 'YES'
       PHILSMS_LIVE_SEND: '0'
     steps:
       - uses: actions/checkout@v5
