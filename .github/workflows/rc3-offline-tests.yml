@@ -144,6 +144,7 @@ jobs:
       PHILSMS_TEST_ALLOW_DDL: 'YES'
       PHILSMS_LIVE_SEND: '0'
       PHILSMS_RC3_STAGING: 'YES'
+      PHILSMS_TEST_PERPL_AUTOLOAD: /tmp/philsms-rc32-perpl/vendor/autoload.php
     steps:
       - uses: actions/checkout@v5
       - name: Configure PHP 8.4 with MySQL
@@ -153,8 +154,11 @@ jobs:
           extensions: pdo_mysql
           coverage: none
           tools: composer:v2
-      - name: Install pinned real Perpl without scripts or plugins
-        run: composer install --no-interaction --no-progress --no-scripts --no-plugins --working-dir=tests/fixtures/rc32-real-perpl
+      - name: Install pinned real Perpl outside plugin checkout
+        run: |
+          mkdir -p /tmp/philsms-rc32-perpl
+          cp tests/fixtures/rc32-real-perpl/composer.json /tmp/philsms-rc32-perpl/composer.json
+          composer install --no-interaction --no-progress --no-scripts --no-plugins --working-dir=/tmp/philsms-rc32-perpl
       - name: Verify real Perpl connection and identity
         run: php tests/rc32-real-perpl-integration.php success
       - name: Exercise isolated RC3 CLI with disposable MySQL
