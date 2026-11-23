@@ -153,4 +153,39 @@ try {
 }
 [$status, $out] = runRc2($script, $autoload, $database, $env);
 if ($status !== 0) throw new RuntimeException('Restored RC2 defaults were rejected: ' . $out);
+// Cross-runner contention: the RC2 initializer and RC3 runner must both
+// refuse while another connection owns their shared migration advisory lock.
+$rc3Script = realpath(__DIR__ . '/../tools/rc32-apply-isolated.php');
+if ($rc3Script === false) throw new RuntimeException('RC3 CLI fixture missing.');
+$rc3Env = array_merge($env, ['PHILSMS_RC3_MIGRATE' => 'YES']);
+if ((int) $db->query("SELECT GET_LOCK('philsms_schema_migrations', 0)")->fetchColumn() !== 1) {
+    throw new RuntimeException('Could not hold shared migration lock.');
+}
+try {
+    [$rc2Status, $rc2Out] = runRc2($script, $autoload, $database, $env);
+    [$rc3Status, $rc3Out] = runRc2($rc3Script, $autoload, $database, $rc3Env);
+    if ($rc2Status === 0 || !str_contains($rc2Out, 'REFUSED:')
+        || $rc3Status === 0 || !str_contains($rc3Out, 'REFUSED:')) {
+        throw new RuntimeException('RC2/RC3 did not both refuse shared-lock contention.');
+    }
+    if ((int) $db->query(
+        "SELECT COUNT(*) FROM information_schema.tables
+         WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
+    )->fetchColumn() !== 0) {
+        throw new RuntimeException('RC3 DDL occurred while shared migration lock was held.');
+    }
+} finally {
+    $db->query("SELECT RELEASE_LOCK('philsms_schema_migrations')");
+}
+[$rc2Status, $rc2Out] = runRc2($script, $autoload, $database, $env);
+if ($rc2Status !== 0) throw new RuntimeException('RC2 failed after shared lock release.');
+[$rc3Status, $rc3Out] = runRc2($rc3Script, $autoload, $database, $rc3Env);
+if ($rc3Status !== 0) throw new RuntimeException('RC3 failed after shared lock release.');
+if ((int) $db->query(
+    "SELECT COUNT(*) FROM philsms_schema_migrations
+     WHERE version IN ('004_leader_registry', '005_leader_assignments', '006_assignment_activity')"
+)->fetchColumn() !== 3) {
+    throw new RuntimeException('RC3 history incomplete after lock release.');
+}
+echo "PASS: RC2 and RC3 share migration lock and resume after release\\n";
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
