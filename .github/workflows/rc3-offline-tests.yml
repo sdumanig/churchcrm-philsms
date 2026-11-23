@@ -29,6 +29,8 @@ jobs:
           php -l tests/migration-runner-unit.php
           php -l tests/migration-runner-integration.php
           php -l tests/leader-repository-integration.php
+          php -l src/AssignmentEligibility.php
+          php -l tests/assignment-eligibility-integration.php
       - name: Run offline leader repository tests
         run: php tests/leader-repository-unit.php
       - name: Run offline migration runner contract checks
@@ -70,3 +72,5 @@ jobs:
         run: php tests/migration-runner-integration.php
       - name: Run leader repository integration test
         run: php tests/leader-repository-integration.php
+      - name: Run assignment eligibility integration test
+        run: php tests/assignment-eligibility-integration.php
