@@ -26,6 +26,8 @@ $db->exec($sql);
 function invokeIsolated(string $script, string $autoload, string $database, array $overrides): array
 {
     $env = array_merge($_ENV, [
+        'PHILSMS_TEST_ALLOW_DDL' => getenv('PHILSMS_TEST_ALLOW_DDL') ?: '',
+        'PHILSMS_TEST_DIAGNOSTICS' => getenv('PHILSMS_TEST_DIAGNOSTICS') ?: '',
         'PHILSMS_RC3_MIGRATE' => 'YES',
         'PHILSMS_RC3_STAGING' => 'YES',
         'PHILSMS_LIVE_SEND' => '0',
