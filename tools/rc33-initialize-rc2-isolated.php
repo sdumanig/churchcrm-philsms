@@ -47,6 +47,14 @@ try {
     );
     $db = \Propel\Runtime\Propel::getWriteConnection('default');
 
+    // Hold the advisory lock throughout preflight and DDL so concurrent
+    // initializer processes cannot both inspect an absent table.
+    $lock = $db->prepare('SELECT GET_LOCK(?, 10)');
+    $lock->execute(['philsms_rc2_initialize']);
+    if ((int) $lock->fetchColumn() !== 1) {
+        throw new RuntimeException('RC2 initialization lock unavailable.');
+    }
+    try {
     // Preflight existing objects before any DDL. A missing table is permitted;
     // an existing table must contain the reviewed columns and unique keys.
     $definitions = [
@@ -101,13 +109,6 @@ try {
         }
     }
 
-    // Serialize initializations with other invocations of this installer.
-    $lock = $db->prepare('SELECT GET_LOCK(?, 10)');
-    $lock->execute(['philsms_rc2_initialize']);
-    if ((int) $lock->fetchColumn() !== 1) {
-        throw new RuntimeException('RC2 initialization lock unavailable.');
-    }
-    try {
         foreach (['001_notification_queue.sql', '002_message_templates.sql',
                   '003_default_message_templates.sql'] as $filename) {
             $sql = file_get_contents(__DIR__ . '/../migrations/' . $filename);
