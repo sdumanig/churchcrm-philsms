@@ -141,4 +141,16 @@ try {
 }
 [$status, $out] = runRc2($script, $autoload, $database, $env);
 if ($status !== 0) throw new RuntimeException('Restored RC2 index was rejected: ' . $out);
+// A changed queue status default is incompatible despite matching types.
+$db->exec("ALTER TABLE philsms_notification_queue ALTER COLUMN status SET DEFAULT 'sent'");
+try {
+    [$status, $out] = runRc2($script, $autoload, $database, $env);
+    if ($status === 0 || !str_contains($out, 'REFUSED:')) {
+        throw new RuntimeException('Incompatible RC2 status default was accepted.');
+    }
+} finally {
+    $db->exec("ALTER TABLE philsms_notification_queue ALTER COLUMN status SET DEFAULT 'pending'");
+}
+[$status, $out] = runRc2($script, $autoload, $database, $env);
+if ($status !== 0) throw new RuntimeException('Restored RC2 defaults were rejected: ' . $out);
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
