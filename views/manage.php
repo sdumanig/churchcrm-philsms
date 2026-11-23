@@ -595,7 +595,7 @@ $live = ($liveSendingEnabled === true);
                     <h5>Assign an approval</h5>
                     <p class="text-muted">Select the recorded approval, an active designated leader, and an eligible contact. Assignment does not send SMS.</p>
                     <form id="philsms-assignment-form" method="post"
-                          action="<?= $base ?>plugins/philsms/assignments/create">
+                          action="<?= $base ?>/plugins/philsms/assignments/create">
                         <input type="hidden" name="csrf"
                                value="<?= htmlspecialchars((string) $_SESSION['philsms_csrf'], ENT_QUOTES, 'UTF-8') ?>">
                         <div class="mb-3">
