@@ -17,6 +17,9 @@ use Propel\Runtime\Propel;
  */
 final class LeaderRepository
 {
+    private const MAX_ACTIVE_LEADERS = 7;
+    private const DESIGNATION_LOCK = 'philsms_leader_designation';
+
     public static function listAll(): array
     {
         self::requireAdmin();
@@ -62,15 +65,41 @@ final class LeaderRepository
         self::requireExistingPerson($personId);
 
         $connection = Propel::getWriteConnection('default');
-        $statement = $connection->prepare(
-            'INSERT INTO philsms_leaders
-                (person_id, is_active, created_by, updated_by)
-             VALUES (?, 1, ?, ?)
-             ON DUPLICATE KEY UPDATE
-                is_active = 1,
-                updated_by = VALUES(updated_by)'
-        );
-        $statement->execute([$personId, $actorPersonId, $actorPersonId]);
+        // Serialize all designations, including reactivation, across admins.
+        // MySQL advisory locks are connection-scoped; always release in finally.
+        $lock = $connection->prepare('SELECT GET_LOCK(?, 10)');
+        $lock->execute([self::DESIGNATION_LOCK]);
+        if ((int) $lock->fetchColumn() !== 1) {
+            throw new \RuntimeException('Unable to acquire leader designation lock.');
+        }
+        try {
+            $existing = $connection->prepare(
+                'SELECT is_active FROM philsms_leaders WHERE person_id = ?'
+            );
+            $existing->execute([$personId]);
+            $active = $existing->fetchColumn();
+            if ($active === false || (int) $active !== 1) {
+                $count = $connection->prepare(
+                    'SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1'
+                );
+                $count->execute();
+                if ((int) $count->fetchColumn() >= self::MAX_ACTIVE_LEADERS) {
+                    throw new \RuntimeException('Maximum of seven active designated leaders reached.');
+                }
+            }
+            $statement = $connection->prepare(
+                'INSERT INTO philsms_leaders
+                    (person_id, is_active, created_by, updated_by)
+                 VALUES (?, 1, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                    is_active = 1,
+                    updated_by = VALUES(updated_by)'
+            );
+            $statement->execute([$personId, $actorPersonId, $actorPersonId]);
+        } finally {
+            $release = $connection->prepare('SELECT RELEASE_LOCK(?)');
+            $release->execute([self::DESIGNATION_LOCK]);
+        }
     }
 
     /**
