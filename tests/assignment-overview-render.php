@@ -78,7 +78,7 @@ namespace {
             !str_contains($html, "method: 'POST'") ||
             !str_contains($html, 'button.disabled = true') ||
             !str_contains($html, 'button.disabled = false')) {
-            throw new \\RuntimeException('Leader designation form security or submission contract missing.');
+            throw new \RuntimeException('Leader designation form security or submission contract missing.');
         }
         echo "PASS: designation form CSRF and submission contract\n";
 
