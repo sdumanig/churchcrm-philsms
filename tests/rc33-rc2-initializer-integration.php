@@ -115,4 +115,18 @@ foreach ($db->query("SELECT version, checksum FROM philsms_schema_migrations WHE
         throw new RuntimeException('Legacy RC2 adoption recorded incorrect checksum.');
     }
 }
+// Negative compatibility regression: a narrower phone column must be
+// rejected even when its name and the unique indexes remain unchanged.
+$db->exec('ALTER TABLE philsms_notification_queue MODIFY recipient_phone VARCHAR(12) DEFAULT NULL');
+try {
+    [$status, $out] = runRc2($script, $autoload, $database, $env);
+    if ($status === 0 || !str_contains($out, 'REFUSED:')) {
+        throw new RuntimeException('Incompatible legacy RC2 column was accepted.');
+    }
+} finally {
+    $db->exec('ALTER TABLE philsms_notification_queue MODIFY recipient_phone VARCHAR(30) DEFAULT NULL');
+}
+// The original schema must still be accepted after the negative test.
+[$status, $out] = runRc2($script, $autoload, $database, $env);
+if ($status !== 0) throw new RuntimeException('Restored RC2 schema was rejected: ' . $out);
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
