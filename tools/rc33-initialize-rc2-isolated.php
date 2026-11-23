@@ -82,6 +82,53 @@ try {
             }
             continue;
         }
+        // Existing RC2 tables must retain the reviewed InnoDB storage engine.
+        $engine = $db->prepare('SELECT engine FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
+        $engine->execute([$table]);
+        if (strtolower((string) $engine->fetchColumn()) !== 'innodb') {
+            throw new RuntimeException('Existing RC2 storage engine is incompatible.');
+        }
+        // Check essential column signatures, not just names. These types and
+        // nullability constraints come directly from RC2 migrations 001-002.
+        $signatures = [
+            'philsms_notification_queue' => [
+                'id' => ['bigint unsigned', 'NO'],
+                'event_type' => ['varchar(50)', 'NO'],
+                'event_entity_id' => ['int unsigned', 'NO'],
+                'person_id' => ['int unsigned', 'YES'],
+                'family_id' => ['int unsigned', 'YES'],
+                'recipient_phone' => ['varchar(30)', 'YES'],
+                'status' => ['varchar(20)', 'NO'],
+                'attempts' => ['int unsigned', 'NO'],
+                'created_at' => ['datetime', 'NO'],
+                'updated_at' => ['datetime', 'NO'],
+                'sent_at' => ['datetime', 'YES'],
+            ],
+            'philsms_message_templates' => [
+                'id' => ['int unsigned', 'NO'],
+                'template_key' => ['varchar(60)', 'NO'],
+                'template_name' => ['varchar(120)', 'NO'],
+                'message_body' => ['text', 'NO'],
+                'is_enabled' => ['tinyint(1)', 'NO'],
+                'created_at' => ['datetime', 'NO'],
+                'updated_at' => ['datetime', 'NO'],
+            ],
+        ];
+        $meta = $db->prepare('SELECT column_name, column_type, is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?');
+        $meta->execute([$table]);
+        $actual = [];
+        foreach ($meta->fetchAll(\PDO::FETCH_ASSOC) as $field) {
+            $field = array_change_key_case($field, CASE_LOWER);
+            $actual[strtolower((string) $field['column_name'])] = [
+                strtolower((string) $field['column_type']),
+                strtoupper((string) $field['is_nullable']),
+            ];
+        }
+        foreach ($signatures[$table] as $name => $signature) {
+            if (($actual[$name] ?? null) !== $signature) {
+                throw new RuntimeException('Existing RC2 column definition is incompatible.');
+            }
+        }
         $q = $db->prepare('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?');
         $q->execute([$table]);
         $columns = array_map('strtolower', $q->fetchAll(\PDO::FETCH_COLUMN));
