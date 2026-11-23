@@ -26,6 +26,7 @@ jobs:
           php -l src/PhilSMSPlugin.php
           php -l tests/activation-migration-contract.php
           php -l tools/rc3-migration-preflight.php
+          php -l tools/rc3-apply-migrations.php
           php -l src/LeaderRepository.php
           php -l src/MigrationRunner.php
           php -l tests/leader-repository-unit.php
@@ -42,6 +43,12 @@ jobs:
           php -l src/AssignmentService.php
           php -l tests/assignment-service-integration.php
           php -l tests/assignment-route-mysql-integration.php
+      - name: Refuse unauthorized CLI migration attempts
+        run: |
+          if php tools/rc3-apply-migrations.php --apply /nonexistent/bootstrap.php staging_test; then
+            echo 'FAIL: Unauthorized migration attempt was accepted' >&2
+            exit 1
+          fi
       - name: Validate reviewed RC3 migration manifest
         run: |
           php tools/rc3-migration-preflight.php
