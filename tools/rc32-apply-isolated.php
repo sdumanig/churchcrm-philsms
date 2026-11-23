@@ -61,6 +61,39 @@ try {
     if ((int) $queue->fetchColumn() !== 1) {
         isolatedRefuse('RC2 queue absent; unverified installation.');
     }
+    // Fail closed on incomplete RC2 initialization before any RC3 DDL.
+    // This preliminary check does not replace the runner's migration lock.
+    foreach (['philsms_notification_queue', 'philsms_message_templates',
+              'philsms_schema_migrations'] as $requiredTable) {
+        $check = $connection->prepare(
+            "SELECT COUNT(*) FROM information_schema.tables
+             WHERE table_schema = DATABASE() AND table_name = ? AND table_type = 'BASE TABLE' AND engine = 'InnoDB'"
+        );
+        $check->execute([$requiredTable]);
+        if ((int) $check->fetchColumn() !== 1) {
+            throw new \RuntimeException('RC2 prerequisite table missing or incompatible.');
+        }
+    }
+    foreach ([
+        '001_notification_queue' => '001_notification_queue.sql',
+        '002_message_templates' => '002_message_templates.sql',
+        '003_default_message_templates' => '003_default_message_templates.sql',
+    ] as $version => $filename) {
+        $sql = file_get_contents(__DIR__ . '/../migrations/' . $filename);
+        if ($sql === false || trim($sql) === '') {
+            throw new \RuntimeException('RC2 prerequisite migration file missing.');
+        }
+        $check = $connection->prepare(
+            'SELECT checksum FROM philsms_schema_migrations WHERE version = ?'
+        );
+        $check->execute([$version]);
+        $row = $check->fetch(\PDO::FETCH_ASSOC);
+        $row = is_array($row) ? array_change_key_case($row, CASE_LOWER) : [];
+        if (!isset($row['checksum'])
+            || !hash_equals(hash('sha256', $sql), (string) $row['checksum'])) {
+            throw new \RuntimeException('RC2 prerequisite migration history invalid.');
+        }
+    }
     require_once __DIR__ . '/../src/MigrationRunner.php';
     \ChurchCRM\Plugins\PhilSMS\MigrationRunner::run();
 } catch (\Throwable $e) {
