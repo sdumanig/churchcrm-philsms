@@ -49,6 +49,19 @@ foreach ([
         throw new RuntimeException('Unsafe RC2 initialization was accepted.');
     }
 }
+// A separate connection holds the named lock: the CLI must refuse before DDL.
+$held = (int) $db->query("SELECT GET_LOCK('philsms_rc2_initialize', 0)")->fetchColumn();
+if ($held !== 1) throw new RuntimeException('Could not hold RC2 concurrency test lock.');
+try {
+    [$status, $out] = runRc2($script, $autoload, $database, $env);
+    if ($status === 0 || !str_contains($out, 'REFUSED:')) {
+        throw new RuntimeException('Concurrent RC2 initializer did not refuse.');
+    }
+    $existing = (int) $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'philsms_message_templates'")->fetchColumn();
+    if ($existing !== 0) throw new RuntimeException('Concurrent initializer performed DDL before acquiring lock.');
+} finally {
+    $db->query("SELECT RELEASE_LOCK('philsms_rc2_initialize')");
+}
 [$status, $out] = runRc2($script, $autoload, $database, $env);
 if ($status !== 0) throw new RuntimeException('Fresh RC2 initialization failed: ' . $out);
 if ((int) $db->query('SELECT COUNT(*) FROM philsms_message_templates')->fetchColumn() !== 5) {
