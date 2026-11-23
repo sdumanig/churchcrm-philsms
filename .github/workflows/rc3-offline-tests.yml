@@ -29,6 +29,7 @@ jobs:
           php -l tools/rc3-apply-migrations.php
           php -l src/CliPropelAdapter.php
           php -l tests/rc32-cli-propel-adapter-offline.php
+          php -l tests/rc32-real-perpl-integration.php
           php -l tests/rc3-migration-cli-integration.php
           php -l src/LeaderRepository.php
           php -l src/MigrationRunner.php
@@ -115,3 +116,56 @@ jobs:
         run: php tests/assignment-service-integration.php
       - name: Exercise assignment route with isolated MySQL
         run: php tests/assignment-route-mysql-integration.php
+
+  real-perpl-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_root_password
+          MYSQL_DATABASE: philsms_test_staging_rc32
+          MYSQL_USER: philsms_test
+          MYSQL_PASSWORD: test_only_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_only_root_password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      PHILSMS_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=philsms_test_staging_rc32;charset=utf8mb4
+      PHILSMS_TEST_USER: philsms_test
+      PHILSMS_TEST_PASSWORD: test_only_password
+      PHILSMS_TEST_ALLOW_DDL: 'YES'
+      PHILSMS_LIVE_SEND: '0'
+      PHILSMS_RC3_STAGING: 'YES'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure PHP 8.4 with MySQL
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+          tools: composer:v2
+      - name: Install pinned real Perpl without scripts or plugins
+        run: composer install --no-interaction --no-progress --no-scripts --no-plugins --working-dir=tests/fixtures/rc32-real-perpl
+      - name: Verify real Perpl connection and identity
+        run: php tests/rc32-real-perpl-integration.php success
+      - name: Reject mismatched expected database
+        run: |
+          if php tests/rc32-real-perpl-integration.php wrong-expected; then
+            echo 'FAIL: real Perpl adapter accepted mismatched database' >&2
+            exit 1
+          fi
+      - name: Reject live sending authorization
+        env:
+          PHILSMS_LIVE_SEND: '1'
+        run: |
+          if php tests/rc32-real-perpl-integration.php success; then
+            echo 'FAIL: real Perpl adapter accepted live sending' >&2
+            exit 1
+          fi
