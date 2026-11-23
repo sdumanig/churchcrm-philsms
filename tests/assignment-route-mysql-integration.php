@@ -102,7 +102,7 @@ namespace {
         $db->exec(file_get_contents(__DIR__ . '/../migrations/' . $migration . '.sql'));
     }
     require __DIR__ . '/../src/AssignmentService.php';
-    foreach ([902, 9901, 17001, 17002, 18001, 18002] as $id) {
+    foreach ([902, 9917, 17001, 17002, 18001, 18002] as $id) {
         PersonQuery::$people[$id] = new class($id) {
             public function __construct(private int $id) {}
             public function getId(): int { return $this->id; }
@@ -111,7 +111,9 @@ namespace {
     FamilyQuery::$families[18100] = new class {
         public function getAdults(): array { return [PersonQuery::$people[18001]]; }
     };
-    $db->exec('INSERT INTO philsms_leaders (person_id, created_by) VALUES (9901, 902)');
+    // The CI job runs multiple integration suites in one disposable schema.
+    // Use a distinct fixture identity so earlier suites cannot collide.
+    $db->exec('INSERT INTO philsms_leaders (person_id, created_by) VALUES (9917, 902)');
     $leaderId = (int) $db->lastInsertId();
     $insert = $db->prepare(
         'INSERT INTO philsms_notification_queue
