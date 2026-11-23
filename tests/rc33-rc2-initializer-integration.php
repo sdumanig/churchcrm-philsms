@@ -129,4 +129,16 @@ try {
 // The original schema must still be accepted after the negative test.
 [$status, $out] = runRc2($script, $autoload, $database, $env);
 if ($status !== 0) throw new RuntimeException('Restored RC2 schema was rejected: ' . $out);
+// Missing operational lookup indexes must prevent legacy schema adoption.
+$db->exec('ALTER TABLE philsms_notification_queue DROP INDEX idx_philsms_person');
+try {
+    [$status, $out] = runRc2($script, $autoload, $database, $env);
+    if ($status === 0 || !str_contains($out, 'REFUSED:')) {
+        throw new RuntimeException('Missing RC2 lookup index was accepted.');
+    }
+} finally {
+    $db->exec('ALTER TABLE philsms_notification_queue ADD INDEX idx_philsms_person (person_id)');
+}
+[$status, $out] = runRc2($script, $autoload, $database, $env);
+if ($status !== 0) throw new RuntimeException('Restored RC2 index was rejected: ' . $out);
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
