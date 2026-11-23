@@ -22,4 +22,13 @@ if (str_contains($source, 'MigrationRunner::run()')
     || str_contains($source, 'LoadConfigs.php')) {
     throw new RuntimeException('RC2 initializer invokes forbidden upgrade/bootstrap.');
 }
+$lockPos = strpos($source, "SELECT GET_LOCK(?, 10)");
+$preflightPos = strpos($source, "foreach (\$definitions as \$table => \$definition)");
+$ddlPos = strpos($source, "\$db->exec(\$sql)");
+$releasePos = strpos($source, "SELECT RELEASE_LOCK(?)");
+if ($lockPos === false || $preflightPos === false || $ddlPos === false
+    || $releasePos === false || !($lockPos < $preflightPos
+    && $preflightPos < $ddlPos && $ddlPos < $releasePos)) {
+    throw new RuntimeException('RC2 lock must span preflight and DDL.');
+}
 echo "PASS: RC2 isolated CLI static safety contract\n";
