@@ -620,7 +620,11 @@ $live = ($liveSendingEnabled === true);
                                 <?php foreach ($designatedLeaders as $leader): ?>
                                     <?php if (!empty($leader['is_active'])): ?>
                                         <option value="<?= (int) $leader['id'] ?>">
-                                            ChurchCRM person #<?= (int) $leader['person_id'] ?>
+                                            <?= htmlspecialchars(
+                                                (string) ($leader['display_name'] ?? ('ChurchCRM person #' . (int) $leader['person_id'])),
+                                                ENT_QUOTES,
+                                                'UTF-8'
+                                            ) ?> (person #<?= (int) $leader['person_id'] ?>)
                                         </option>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
@@ -650,7 +654,11 @@ $live = ($liveSendingEnabled === true);
                                 <?php foreach ($designatedLeaders as $leader): ?>
                                     <tr>
                                         <td><?= (int) $leader['id'] ?></td>
-                                        <td><?= (int) $leader['person_id'] ?></td>
+                                        <td><?= htmlspecialchars(
+                                            (string) ($leader['display_name'] ?? ('ChurchCRM person #' . (int) $leader['person_id'])),
+                                            ENT_QUOTES,
+                                            'UTF-8'
+                                        ) ?> (#<?= (int) $leader['person_id'] ?>)</td>
                                         <td><?= !empty($leader['is_active']) ? 'Active' : 'Inactive' ?></td>
                                     </tr>
                                 <?php endforeach; ?>
