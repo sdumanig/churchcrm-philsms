@@ -27,6 +27,8 @@ jobs:
           php -l tests/activation-migration-contract.php
           php -l tools/rc3-migration-preflight.php
           php -l tools/rc3-apply-migrations.php
+          php -l src/CliPropelAdapter.php
+          php -l tests/rc32-cli-propel-adapter-offline.php
           php -l tests/rc3-migration-cli-integration.php
           php -l src/LeaderRepository.php
           php -l src/MigrationRunner.php
@@ -50,6 +52,8 @@ jobs:
             echo 'FAIL: Unauthorized migration attempt was accepted' >&2
             exit 1
           fi
+      - name: Exercise unwired RC3.2 adapter safety contract
+        run: php tests/rc32-cli-propel-adapter-offline.php
       - name: Validate reviewed RC3 migration manifest
         run: |
           php tools/rc3-migration-preflight.php
