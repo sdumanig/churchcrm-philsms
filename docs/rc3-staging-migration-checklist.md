@@ -6,10 +6,11 @@ The feature branch is not a deployment instruction.
 
 ## Why an already-enabled plugin needs special handling
 
-`PhilSMSPlugin::activate()` now initializes the RC2 notification queue and
-calls `MigrationRunner::run()` for migrations 004–006. **Replacing plugin files
-does not necessarily invoke `activate()` again**. Do not assume that an
-already-enabled ChurchCRM installation has applied RC3 migrations.
+`PhilSMSPlugin::activate()` initializes the RC2 notification queue but **does
+not apply RC3 migrations 004–006**. Those schema changes require the separately
+authorized isolated CLI. **Replacing plugin files does not necessarily invoke
+`activate()` again**. Do not assume an already-enabled ChurchCRM installation
+has applied RC3 migrations.
 
 Do not disable/re-enable the plugin merely to trigger migrations without first
 confirming ChurchCRM's plugin lifecycle behavior, the current installed version,
@@ -27,9 +28,9 @@ it deliberately refuses databases outside `philsms_test_*`.
    `liveSending` setting is off. Preserve RC2 queue/drafts/history.
 4. Review the migration files, their checksums, and current schema with a
    read-only connection. Verify the existing RC2 queue table is present.
-5. Determine whether ChurchCRM will call `activate()` on the intended update.
-   If not, use the separately authorized isolated migration CLI with an
-   independently verified staging database connection. Do not execute
+5. Review ChurchCRM activation/update behavior and use the separately
+   authorized isolated migration CLI for RC3 schema changes, regardless of
+   whether ChurchCRM calls `activate()`. Do not execute
    arbitrary SQL from a web request or invoke the test runner in staging.
 6. Obtain explicit approval for both the plugin deployment and schema change
    before running either. Production CT 3100 is out of scope.
