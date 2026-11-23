@@ -29,6 +29,9 @@ jobs:
           php -l src/CliPropelAdapter.php
           php -l tests/rc32-cli-propel-adapter-offline.php
           php -l tests/rc32-real-perpl-integration.php
+          php -l tools/rc33-initialize-rc2-isolated.php
+          php -l tests/rc33-rc2-initializer-contract.php
+          php -l tests/rc33-rc2-initializer-integration.php
           php -l tools/rc32-apply-isolated.php
           php -l tests/rc32-isolated-cli-integration.php
           php -l src/LeaderRepository.php
@@ -47,6 +50,8 @@ jobs:
           php -l src/AssignmentService.php
           php -l tests/assignment-service-integration.php
           php -l tests/assignment-route-mysql-integration.php
+      - name: Verify RC2 initializer safety contract
+        run: php tests/rc33-rc2-initializer-contract.php
       - name: Exercise unwired RC3.2 adapter safety contract
         run: php tests/rc32-cli-propel-adapter-offline.php
       - name: Validate reviewed RC3 migration manifest
@@ -153,6 +158,8 @@ jobs:
           composer install --no-interaction --no-progress --no-scripts --no-plugins --working-dir=/tmp/philsms-rc32-perpl
       - name: Verify real Perpl connection and identity
         run: php tests/rc32-real-perpl-integration.php success
+      - name: Exercise isolated RC2 initializer with disposable MySQL
+        run: php tests/rc33-rc2-initializer-integration.php
       - name: Exercise isolated RC3 CLI with disposable MySQL
         run: php tests/rc32-isolated-cli-integration.php
       - name: Reject mismatched expected database
