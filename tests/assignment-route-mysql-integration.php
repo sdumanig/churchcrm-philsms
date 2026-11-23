@@ -159,6 +159,8 @@ namespace {
     function rowCountFor(\PDO $db, string $table): int {
         return (int) $db->query('SELECT COUNT(*) FROM ' . $table)->fetchColumn();
     }
+    $assignmentsBefore = rowCountFor($db, 'philsms_leader_assignments');
+    $activityBefore = rowCountFor($db, 'philsms_assignment_activity');
     attempt($handler, array_replace($base, ['csrf' => 'invalid']), 403, 'Invalid CSRF');
     attempt($handler, array_replace($base, ['contact_person_id' => '17112']), 422,
         'Invalid individual contact');
@@ -171,8 +173,8 @@ namespace {
         public function isAdmin(): bool { return true; }
         public function getId(): int { return 902; }
     };
-    if (rowCountFor($db, 'philsms_leader_assignments') !== 0 ||
-        rowCountFor($db, 'philsms_assignment_activity') !== 0) {
+    if (rowCountFor($db, 'philsms_leader_assignments') !== $assignmentsBefore ||
+        rowCountFor($db, 'philsms_assignment_activity') !== $activityBefore) {
         throw new \RuntimeException('Rejected requests created rows.');
     }
     echo "PASS: rejected requests do not write\n";
@@ -193,6 +195,7 @@ namespace {
                 h.actor_person_id, h.action, h.new_status
          FROM philsms_leader_assignments a
          JOIN philsms_assignment_activity h ON h.assignment_id = a.id
+         WHERE a.approval_queue_id IN (' . (int) $individual . ', ' . (int) $family . ')
          ORDER BY a.id'
     )->fetchAll(\PDO::FETCH_ASSOC);
     if (count($rows) !== 2 ||
