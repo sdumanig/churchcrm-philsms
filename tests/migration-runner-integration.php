@@ -113,6 +113,40 @@ verify((int) $connection->query(
      WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
 )->fetchColumn() === 0, 'Invalid RC2 default blocks RC3 DDL');
 
+// A wrong column type must be refused without creating RC3 tables.
+$connection->exec('ALTER TABLE philsms_notification_queue MODIFY COLUMN event_type VARCHAR(51) NOT NULL');
+try {
+    MigrationRunner::run();
+    throw new RuntimeException('FAIL: RC3 accepted incompatible RC2 column');
+} catch (RuntimeException $e) {
+    if ($e->getMessage() !== 'RC2 prerequisite column incompatible.') {
+        throw $e;
+    }
+} finally {
+    $connection->exec('ALTER TABLE philsms_notification_queue MODIFY COLUMN event_type VARCHAR(50) NOT NULL');
+}
+verify((int) $connection->query(
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
+)->fetchColumn() === 0, 'Invalid RC2 column blocks RC3 DDL');
+
+// A missing operational index must also be refused before RC3 DDL.
+$connection->exec('ALTER TABLE philsms_notification_queue DROP INDEX idx_philsms_person');
+try {
+    MigrationRunner::run();
+    throw new RuntimeException('FAIL: RC3 accepted missing RC2 index');
+} catch (RuntimeException $e) {
+    if ($e->getMessage() !== 'RC2 prerequisite index incompatible.') {
+        throw $e;
+    }
+} finally {
+    $connection->exec('ALTER TABLE philsms_notification_queue ADD INDEX idx_philsms_person (person_id)');
+}
+verify((int) $connection->query(
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
+)->fetchColumn() === 0, 'Missing RC2 index blocks RC3 DDL');
+
 // The runner must preserve RC2 history and add exactly three RC3 versions.
 MigrationRunner::run();
 verify((int) $connection->query(
