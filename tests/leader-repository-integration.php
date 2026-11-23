@@ -111,5 +111,18 @@ namespace {
     check((int) $leader['is_active'] === 1 && (int) $leader['created_by'] === 901 &&
         (int) $leader['updated_by'] === 902, 'Reactivation retains creator and records current admin');
     check(count(LeaderRepository::listAll()) >= 1, 'Admin can list persisted leaders');
-    echo "\nResults: {$passed} passed\n";
+    foreach (range(910, 916) as $id) PersonQuery::$people[$id] = new \stdClass();
+    foreach (range(910, 915) as $id) LeaderRepository::designate($id);
+    check((int) $pdo->query('SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1')->fetchColumn() === 7,
+        'Seven active leaders allowed');
+    expectReject(fn() => LeaderRepository::designate(916), 'Eighth active leader rejected');
+    LeaderRepository::designate(903);
+    check((int) $pdo->query('SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1')->fetchColumn() === 7,
+        'Repeated active designation allowed at capacity');
+    check(LeaderRepository::deactivate(910), 'Deactivate to free a designation slot');
+    LeaderRepository::designate(916);
+    check((int) $pdo->query('SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1')->fetchColumn() === 7,
+        'Vacated slot assigned without exceeding capacity');
+    expectReject(fn() => LeaderRepository::designate(910), 'Reactivation at capacity rejected');
+    echo "\\nResults: {$passed} passed\\n";
 }
