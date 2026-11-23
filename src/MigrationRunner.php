@@ -68,10 +68,13 @@ final class MigrationRunner
                     ' WHERE version = ?'
                 );
                 $statement->execute([$version]);
-                $existingChecksum = $statement->fetchColumn();
+                // Perpl's connection wrapper may normalize fetchColumn() on
+                // an empty result differently from native PDO. Check row
+                // existence explicitly before comparing the checksum.
+                $existingRow = $statement->fetch(\PDO::FETCH_ASSOC);
 
-                if ($existingChecksum !== false && $existingChecksum !== null) {
-                    if (!hash_equals((string) $existingChecksum, $checksum)) {
+                if (is_array($existingRow)) {
+                    if (!hash_equals((string) $existingRow['checksum'], $checksum)) {
                         throw new \RuntimeException(
                             'Previously applied PhilSMS migration has changed: ' . $version
                         );
