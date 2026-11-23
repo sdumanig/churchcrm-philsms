@@ -85,11 +85,15 @@ verify((int) $connection->query(
 MigrationRunner::run();
 verify((int) $connection->query(
     'SELECT COUNT(*) FROM philsms_schema_migrations'
-)->fetchColumn() === 1, 'Second run retains one recorded migration');
+)->fetchColumn() === 2, 'Second run retains two recorded migrations');
 verify((int) $connection->query(
     "SELECT COUNT(*) FROM information_schema.tables
      WHERE table_schema = DATABASE() AND table_name = 'philsms_leaders'"
 )->fetchColumn() === 1, 'Leader registry table exists');
+verify((int) $connection->query(
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'philsms_leader_assignments'"
+)->fetchColumn() === 1, 'Leader assignment table exists');
 
 $lockName = 'philsms_schema_migrations';
 $lock = $second->prepare('SELECT GET_LOCK(?, 0)');
