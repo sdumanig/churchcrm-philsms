@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v5
       - name: Configure PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
@@ -28,6 +28,7 @@ jobs:
           php -l tests/leader-repository-unit.php
           php -l tests/migration-runner-unit.php
           php -l tests/migration-runner-integration.php
+          php -l tests/leader-repository-integration.php
       - name: Run offline leader repository tests
         run: php tests/leader-repository-unit.php
       - name: Run offline migration runner contract checks
@@ -57,7 +58,7 @@ jobs:
       PHILSMS_TEST_ALLOW_DDL: 'YES'
       PHILSMS_LIVE_SEND: '0'
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v5
       - name: Configure PHP 8.3 with PDO MySQL
         uses: shivammathur/setup-php@v2
         with:
@@ -67,3 +68,5 @@ jobs:
           tools: none
       - name: Run isolated migration integration test
         run: php tests/migration-runner-integration.php
+      - name: Run leader repository integration test
+        run: php tests/leader-repository-integration.php
