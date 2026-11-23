@@ -102,14 +102,14 @@ namespace {
         $db->exec(file_get_contents(__DIR__ . '/../migrations/' . $migration . '.sql'));
     }
     require __DIR__ . '/../src/AssignmentService.php';
-    foreach ([902, 9917, 17001, 17002, 18001, 18002] as $id) {
+    foreach ([902, 9917, 17111, 17112, 18111, 18112] as $id) {
         PersonQuery::$people[$id] = new class($id) {
             public function __construct(private int $id) {}
             public function getId(): int { return $this->id; }
         };
     }
-    FamilyQuery::$families[18100] = new class {
-        public function getAdults(): array { return [PersonQuery::$people[18001]]; }
+    FamilyQuery::$families[18210] = new class {
+        public function getAdults(): array { return [PersonQuery::$people[18111]]; }
     };
     // The CI job runs multiple integration suites in one disposable schema.
     // Use a distinct fixture identity so earlier suites cannot collide.
@@ -120,9 +120,9 @@ namespace {
          (event_type, event_entity_id, person_id, family_id, status)
          VALUES (?, ?, ?, ?, ?)'
     );
-    $insert->execute(['individual_approved', 17001, 17001, null, 'failed']);
+    $insert->execute(['individual_approved', 17111, 17111, null, 'failed']);
     $individual = (int) $db->lastInsertId();
-    $insert->execute(['family_approved', 18100, null, 18100, 'sent']);
+    $insert->execute(['family_approved', 18210, null, 18210, 'sent']);
     $family = (int) $db->lastInsertId();
 
     $app = new TestApp();
@@ -144,7 +144,7 @@ namespace {
         'csrf' => $_SESSION['philsms_csrf'],
         'approval_queue_id' => (string) $individual,
         'leader_id' => (string) $leaderId,
-        'contact_person_id' => '17001'
+        'contact_person_id' => '17111'
     ];
     function attempt(callable $handler, array $body, int $expected, string $label): array {
         $response = $handler(new TestRequest($body), new TestResponse());
@@ -160,7 +160,7 @@ namespace {
         return (int) $db->query('SELECT COUNT(*) FROM ' . $table)->fetchColumn();
     }
     attempt($handler, array_replace($base, ['csrf' => 'invalid']), 403, 'Invalid CSRF');
-    attempt($handler, array_replace($base, ['contact_person_id' => '17002']), 422,
+    attempt($handler, array_replace($base, ['contact_person_id' => '17112']), 422,
         'Invalid individual contact');
     Auth::$user = new class {
         public function isAdmin(): bool { return false; }
@@ -183,7 +183,7 @@ namespace {
     attempt($handler, $base, 409, 'Duplicate approval rejected');
     $familyCreated = attempt($handler, array_replace($base, [
         'approval_queue_id' => (string) $family,
-        'contact_person_id' => '18001'
+        'contact_person_id' => '18111'
     ]), 201, 'Family adult assigned through route');
     if ((int) ($familyCreated['assignment_id'] ?? 0) <= $id) {
         throw new \RuntimeException('Family assignment missing.');
@@ -196,8 +196,8 @@ namespace {
          ORDER BY a.id'
     )->fetchAll(\PDO::FETCH_ASSOC);
     if (count($rows) !== 2 ||
-        (int) $rows[0]['contact_person_id'] !== 17001 ||
-        (int) $rows[1]['contact_person_id'] !== 18001) {
+        (int) $rows[0]['contact_person_id'] !== 17111 ||
+        (int) $rows[1]['contact_person_id'] !== 18111) {
         throw new \RuntimeException('Unexpected assignment records.');
     }
     foreach ($rows as $row) {
