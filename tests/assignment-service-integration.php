@@ -140,10 +140,9 @@ namespace {
     };
     $event->execute(['individual_approved', 17003, 17003, null, 'pending']);
     $rollbackEvent = (int) $db->lastInsertId();
-    $db->exec("CREATE TRIGGER philsms_test_reject_activity
-        BEFORE INSERT ON philsms_assignment_activity
-        FOR EACH ROW SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Intentional audit failure in isolated test'");
+    // Isolated test only: temporarily rename the audit table to force the
+    // activity insert to fail without requiring elevated trigger privileges.
+    $db->exec('RENAME TABLE philsms_assignment_activity TO philsms_test_hidden_activity');
     try {
         rejects(fn() => AssignmentService::assign($rollbackEvent, $leader, 17003),
             'Activity insertion failure rejects assignment');
@@ -154,7 +153,7 @@ namespace {
         check((int) $count->fetchColumn() === 0,
             'Failed audit insertion rolls back assignment row');
     } finally {
-        $db->exec('DROP TRIGGER philsms_test_reject_activity');
+        $db->exec('RENAME TABLE philsms_test_hidden_activity TO philsms_assignment_activity');
     }
     echo "\nResults: {$passed} passed\n";
 }
