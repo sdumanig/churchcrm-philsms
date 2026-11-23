@@ -69,7 +69,22 @@ try {
         && getenv('PHILSMS_TEST_ALLOW_DDL') === 'YES'
         && $host === '127.0.0.1'
         && str_starts_with($database, 'philsms_test_staging_')) {
-        fwrite(STDERR, 'CI DIAGNOSTIC: ' . get_class($e) . ' (code ' . (int) $e->getCode() . ')\\n');
+        $known = [
+            'Unable to acquire PhilSMS migration lock.',
+            'Invalid PhilSMS migration registration.',
+            'Previously applied PhilSMS migration has changed:',
+            'PhilSMS migration file is missing or empty:',
+            'Unable to acquire PhilSMS migration lock',
+        ];
+        $detail = 'unclassified runtime failure';
+        foreach ($known as $prefix) {
+            if (str_starts_with($e->getMessage(), $prefix)) {
+                $detail = $prefix;
+                break;
+            }
+        }
+        fwrite(STDERR, 'CI DIAGNOSTIC: ' . get_class($e)
+            . ' (code ' . (int) $e->getCode() . ', reason ' . $detail . ")\\n");
     }
     isolatedRefuse('Isolated migration aborted; consult protected server logs.');
 }
