@@ -57,6 +57,16 @@ foreach ([
         throw new RuntimeException('Unsafe invocation was not refused.');
     }
 }
+// The disposable database must not carry RC3 history before the first authorized run.
+$historyExists = (int) $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'philsms_schema_migrations'")->fetchColumn();
+if ($historyExists === 1) {
+    $rows = $db->query('SELECT version, checksum FROM philsms_schema_migrations')->fetchAll(PDO::FETCH_ASSOC);
+    $summary = [];
+    foreach ($rows as $row) {
+        $summary[] = (string) $row['version'] . ':' . (hash_equals((string) $row['checksum'], hash('sha256', (string) file_get_contents(__DIR__ . '/../migrations/' . $row['version'] . '.sql'))) ? 'match' : 'mismatch');
+    }
+    throw new RuntimeException('Unexpected preexisting RC3 migration history: ' . implode(',', $summary));
+}
 foreach ([1, 2] as $attempt) {
     [$status, $output] = invokeIsolated($script, $autoload, $database, []);
     if ($status !== 0 || !str_contains($output, 'PASS: isolated RC3 migrations')) {
