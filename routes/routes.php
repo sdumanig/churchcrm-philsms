@@ -986,3 +986,77 @@ $app->get('/philsms/balance', function(Request $request,Response $response) use 
  }
  return $response->withHeader('Content-Type','text/html; charset=UTF-8')->withHeader('Cache-Control','no-store');
 })->add(AdminRoleAuthMiddleware::class);
+
+
+/**
+ * RC3.1: assign an approved self-registration to a designated leader.
+ * Administrator-only, CSRF-protected; this operation never sends SMS.
+ */
+$app->post('/philsms/assignments/create', function (
+    Request $request,
+    Response $response
+): Response {
+    $json = static function (int $status, array $payload) use ($response): Response {
+        $response->getBody()->write(json_encode(
+            $payload,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
+        ));
+
+        return $response->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8')
+            ->withHeader('Cache-Control', 'no-store');
+    };
+
+    $data = $request->getParsedBody();
+    if (!is_array($data)) {
+        return $json(422, ['success' => false, 'message' => 'Invalid request body.']);
+    }
+
+    if (session_status() !== PHP_SESSION_ACTIVE ||
+        !isset($_SESSION['philsms_csrf']) ||
+        !is_string($_SESSION['philsms_csrf']) ||
+        !is_string($data['csrf'] ?? null) ||
+        !hash_equals($_SESSION['philsms_csrf'], $data['csrf'])) {
+        return $json(403, [
+            'success' => false,
+            'message' => 'Invalid or expired security token.'
+        ]);
+    }
+
+    $ids = [];
+    foreach (['approval_queue_id', 'leader_id', 'contact_person_id'] as $key) {
+        $value = $data[$key] ?? null;
+        if (!is_int($value) && !is_string($value)) {
+            return $json(422, ['success' => false, 'message' => 'Invalid assignment identifiers.']);
+        }
+        $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if (!is_int($id)) {
+            return $json(422, ['success' => false, 'message' => 'Invalid assignment identifiers.']);
+        }
+        $ids[$key] = $id;
+    }
+
+    try {
+        $assignmentId = \ChurchCRM\Plugins\PhilSMS\AssignmentService::assign(
+            $ids['approval_queue_id'],
+            $ids['leader_id'],
+            $ids['contact_person_id']
+        );
+        return $json(201, [
+            'success' => true,
+            'assignment_id' => $assignmentId,
+            'message' => 'Assignment recorded. No SMS was sent.'
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        return $json(422, ['success' => false, 'message' => 'Invalid or ineligible assignment.']);
+    } catch (\RuntimeException $e) {
+        if ($e->getMessage() === 'Approval event already assigned.') {
+            return $json(409, ['success' => false, 'message' => 'Approval event already assigned.']);
+        }
+        error_log('[PhilSMS] Assignment rejected: ' . get_class($e));
+        return $json(403, ['success' => false, 'message' => 'Assignment not authorized.']);
+    } catch (\Throwable $e) {
+        error_log('[PhilSMS] Assignment creation failed: ' . get_class($e));
+        return $json(500, ['success' => false, 'message' => 'Unable to create assignment.']);
+    }
+})->add(AdminRoleAuthMiddleware::class);
