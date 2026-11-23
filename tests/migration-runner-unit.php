@@ -57,8 +57,8 @@ checkContract('Runner records completion only after executing DDL',
 checkContract('Runner restricts migration filenames',
     str_contains($source, 'Invalid PhilSMS migration registration.'));
 
-checkContract('Runner has no migrations registered yet',
-    str_contains($source, 'private const MIGRATIONS = [];'));
+checkContract('Runner registers leader registry migration',
+    str_contains($source, "'004_leader_registry' => '004_leader_registry.sql'"));
 
 checkContract('Runner contains no SMS provider invocation',
     !preg_match('/PhilSMSClient|->send\s*\(/', $source));
