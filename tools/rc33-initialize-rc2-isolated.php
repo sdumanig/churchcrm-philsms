@@ -149,6 +149,28 @@ try {
             }
             $indices[$row['index_name']][] = $row['column_name'];
         }
+        // Primary keys and operational lookup indexes are required too.
+        $requiredIndexes = [
+            'philsms_notification_queue' => [
+                'PRIMARY' => ['id'],
+                'idx_philsms_status_created' => ['status', 'created_at'],
+                'idx_philsms_person' => ['person_id'],
+                'idx_philsms_family' => ['family_id'],
+            ],
+            'philsms_message_templates' => ['PRIMARY' => ['id']],
+        ];
+        $allIndexQuery = $db->prepare('SELECT index_name, column_name, seq_in_index FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? ORDER BY index_name, seq_in_index');
+        $allIndexQuery->execute([$table]);
+        $allIndexes = [];
+        foreach ($allIndexQuery->fetchAll(\PDO::FETCH_ASSOC) as $indexRow) {
+            $indexRow = array_change_key_case($indexRow, CASE_LOWER);
+            $allIndexes[$indexRow['index_name']][] = $indexRow['column_name'];
+        }
+        foreach ($requiredIndexes[$table] as $indexName => $indexColumns) {
+            if (($allIndexes[$indexName] ?? null) !== $indexColumns) {
+                throw new RuntimeException('Existing RC2 primary or lookup index is incompatible.');
+            }
+        }
         foreach ($definition['unique'] as $name => $cols) {
             if (($indices[$name] ?? null) !== $cols) {
                 throw new RuntimeException('Existing RC2 unique index is incompatible.');
