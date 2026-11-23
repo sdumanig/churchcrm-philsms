@@ -31,7 +31,7 @@ final class AssignmentEligibility
                AND a.id IS NULL
                AND (
                     (q.event_type = 'individual_approved'
-                     AND q.person_id = q.event_entity_id AND q.family_id IS NULL)
+                     AND q.person_id = q.event_entity_id)
                     OR
                     (q.event_type = 'family_approved'
                      AND q.family_id = q.event_entity_id)
