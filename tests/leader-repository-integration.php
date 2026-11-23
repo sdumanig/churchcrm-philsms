@@ -124,5 +124,35 @@ namespace {
     check((int) $pdo->query('SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1')->fetchColumn() === 7,
         'Vacated slot assigned without exceeding capacity');
     expectReject(fn() => LeaderRepository::designate(910), 'Reactivation at capacity rejected');
+    // Independent MySQL session simulates a concurrent administrator holding
+    // the designation lock. The repository must refuse rather than bypass it.
+    $competitor = new \PDO($dsn, getenv('PHILSMS_TEST_USER') ?: '',
+        getenv('PHILSMS_TEST_PASSWORD') ?: '',
+        [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+    check((int) $competitor->query(
+        "SELECT GET_LOCK('philsms_leader_designation', 0)"
+    )->fetchColumn() === 1, 'Independent session acquires designation lock');
+    try {
+        check(LeaderRepository::deactivate(915), 'Free one slot while designation lock is held');
+        $before = (int) $pdo->query(
+            'SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1'
+        )->fetchColumn();
+        expectReject(fn() => LeaderRepository::designate(910),
+            'Competing designation refuses unavailable advisory lock');
+        check((int) $pdo->query(
+            'SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1'
+        )->fetchColumn() === $before,
+            'Lock contention cannot change active leader count');
+    } finally {
+        check((int) $competitor->query(
+            "SELECT RELEASE_LOCK('philsms_leader_designation')"
+        )->fetchColumn() === 1, 'Independent session releases designation lock');
+    }
+    LeaderRepository::designate(910);
+    check((int) $pdo->query(
+        'SELECT COUNT(*) FROM philsms_leaders WHERE is_active = 1'
+    )->fetchColumn() === 7, 'Designation succeeds after lock release');
+    expectReject(fn() => LeaderRepository::designate(915),
+        'Eighth active designation still rejected after contention');
     echo "\\nResults: {$passed} passed\\n";
 }
