@@ -1,0 +1,12 @@
+{
+  "name": "philsms/rc32-real-perpl-test",
+  "description": "Disposable RC3.2 integration fixture; never deployed",
+  "type": "project",
+  "require": {
+    "php": "^8.4",
+    "perplorm/perpl": "2.7.0"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
