@@ -24,6 +24,7 @@ final class MigrationRunner
     private const MIGRATIONS = [
         '004_leader_registry' => '004_leader_registry.sql',
         '005_leader_assignments' => '005_leader_assignments.sql',
+        '006_assignment_activity' => '006_assignment_activity.sql',
     ];
 
     public static function run(): void
