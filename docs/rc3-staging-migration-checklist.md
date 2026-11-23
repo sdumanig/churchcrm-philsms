@@ -45,6 +45,25 @@ table. Each migration is idempotent, but MySQL DDL is not transactional; a
 failed run requires investigation before retry. **Do not edit a migration
 already recorded in `philsms_schema_migrations`.**
 
+## ChurchCRM 7.8.7 bootstrap source review (not an installation test)
+
+Upstream tag `ChurchCRM/CRM@7.8.7` has
+`src/Include/Config.php` (installed configuration) which loads
+`src/Include/LoadConfigs.php`. The latter loads Composer autoloading,
+parses configuration, and calls `ChurchCRM\\Bootstrapper::init(...)`.
+This is **not a side-effect-free database bootstrap**: initialization can
+also perform application/session initialization, database version checks,
+and key management. Never assume including `LoadConfigs.php` is safe
+in an unattended migration script or compatible with CLI request context.
+
+The gated migration command accepts an explicitly reviewed bootstrap file,
+but **no supported, verified CLI bootstrap path has yet been established**.
+Do not use the application configuration file or `LoadConfigs.php`
+directly as a shortcut. First inspect the installed staging source and
+version, confirm the bootstrap's behavior in an isolated clone, and
+review any required environment variables or request context. The
+existing simulated-bootstrap CI test cannot validate these properties.
+
 ## Gated CLI invocation for an already-active plugin (not yet staging-validated)
 
 `tools/rc3-apply-migrations.php` is a CLI-only entry point, not a web route.
