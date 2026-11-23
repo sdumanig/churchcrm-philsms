@@ -133,10 +133,9 @@ final class PhilSMSPlugin extends AbstractPlugin {
  }
 
  public function activate(): void {
-  // Preserve RC2 initialization order; the RC3 runner only applies its
-  // explicitly allowlisted, idempotent migrations (004–006).
+  // Preserve RC2 initialization on activation. RC3 schema changes require
+  // a separately authorized invocation of the isolated migration CLI.
   NotificationQueue::initialize();
-  MigrationRunner::run();
  }
 
  public function deactivate(): void {}
