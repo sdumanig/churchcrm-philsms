@@ -50,6 +50,9 @@ namespace {
         public function execute(array $params = []): bool {
             $this->params = $params;
             $this->db->calls[] = ['sql' => $this->sql, 'params' => $params];
+            if (str_contains($this->sql, 'GET_LOCK') || str_contains($this->sql, 'RELEASE_LOCK') || str_contains($this->sql, 'SELECT is_active') || str_contains($this->sql, 'SELECT COUNT(*)')) {
+                return true;
+            }
             if (str_contains($this->sql, 'INSERT INTO philsms_leaders')) {
                 [$person, $creator, $updater] = $params;
                 $old = $this->db->leaders[$person] ?? null;
@@ -70,6 +73,12 @@ namespace {
                 }
             }
             return true;
+        }
+        public function fetchColumn(): int|bool {
+            if (str_contains($this->sql, 'GET_LOCK') || str_contains($this->sql, 'RELEASE_LOCK')) return 1;
+            if (str_contains($this->sql, 'SELECT COUNT(*)')) return count(array_filter($this->db->leaders, fn($x) => $x['is_active'] === 1));
+            if (str_contains($this->sql, 'SELECT is_active')) return $this->db->leaders[$this->params[0]]['is_active'] ?? false;
+            return false;
         }
         public function rowCount(): int { return $this->db->affected; }
         public function fetch(int $mode = 0): array|false {
@@ -149,5 +158,18 @@ namespace {
     verify(LeaderRepository::findByPersonId(20)['person_id'] === 20,
         'Administrator can retrieve leader');
 
+    foreach (range(30, 36) as $id) PersonQuery::$people[$id] = new \stdClass();
+    foreach (range(30, 35) as $id) LeaderRepository::designate($id);
+    verify(count(array_filter($db->leaders, fn($x) => $x['is_active'] === 1)) === 7,
+        'Seven active designated leaders permitted');
+    rejects(fn() => LeaderRepository::designate(36), \RuntimeException::class,
+        'Eighth active leader rejected');
+    LeaderRepository::designate(20);
+    verify(count($db->leaders) === 7, 'Idempotent designation allowed at capacity');
+    LeaderRepository::deactivate(30);
+    LeaderRepository::designate(36);
+    verify($db->leaders[36]['is_active'] === 1, 'Vacated slot can be reused');
+    rejects(fn() => LeaderRepository::designate(30), \RuntimeException::class,
+        'Reactivation rejected at capacity');
     echo "\nResults: {$passed} passed\n";
 }
