@@ -179,13 +179,13 @@ try {
 }
 [$rc2Status, $rc2Out] = runRc2($script, $autoload, $database, $env);
 if ($rc2Status !== 0) throw new RuntimeException('RC2 failed after shared lock release.');
-[$rc3Status, $rc3Out] = runRc2($rc3Script, $autoload, $database, $rc3Env);
-if ($rc3Status !== 0) throw new RuntimeException('RC3 failed after shared lock release.');
+// Leave RC3 unapplied: the next CI step tests its first successful
+// migration against this same disposable database and verifies history.
 if ((int) $db->query(
     "SELECT COUNT(*) FROM philsms_schema_migrations
      WHERE version IN ('004_leader_registry', '005_leader_assignments', '006_assignment_activity')"
-)->fetchColumn() !== 3) {
-    throw new RuntimeException('RC3 history incomplete after lock release.');
+)->fetchColumn() !== 0) {
+    throw new RuntimeException('RC3 unexpectedly applied before its dedicated integration test.');
 }
-echo "PASS: RC2 and RC3 share migration lock and resume after release\\n";
+echo "PASS: RC2 and RC3 both refuse shared-lock contention; RC2 resumes after release\\n";
 echo "PASS: isolated RC2 initialization, refusals, repeatability and preservation\n";
