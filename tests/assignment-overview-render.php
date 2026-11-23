@@ -45,7 +45,7 @@ namespace {
                 'event_entity_id' => 456,
                 'approved_event_at' => '2026-11-23 10:00:00',
             ]],
-            [[ 'id' => 7, 'person_id' => 999, 'is_active' => 1 ]],
+            [[ 'id' => 7, 'person_id' => 999, 'is_active' => 1, 'display_name' => 'Test Leader' ]],
             null
         );
         if (!str_contains($html, 'Unassigned approval events') ||
@@ -54,7 +54,8 @@ namespace {
             !str_contains($html, '999') ||
             !str_contains($html, 'philsms-assignment-form') ||
             !str_contains($html, 'Record assignment (no SMS)') ||
-            !str_contains($html, 'Test Person')) {
+            !str_contains($html, 'Test Person') ||
+            !str_contains($html, 'Test Leader')) {
             throw new \RuntimeException('Populated overview missing expected records.');
         }
         echo "PASS: populated overview renders\n";
