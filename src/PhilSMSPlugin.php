@@ -133,9 +133,9 @@ final class PhilSMSPlugin extends AbstractPlugin {
  }
 
  public function activate(): void {
-  // Preserve RC2 initialization on activation. RC3 schema changes require
-  // a separately authorized invocation of the isolated migration CLI.
-  NotificationQueue::initialize();
+  // Activation is schema-neutral. Operators must explicitly initialize RC2
+  // and apply RC3 migrations through the isolated, guarded CLI workflows.
+  // Never perform implicit DDL or send SMS from the plugin lifecycle.
  }
 
  public function deactivate(): void {}
