@@ -102,8 +102,13 @@ namespace {
         'Individual contact must match approved person');
     rejects(fn() => AssignmentService::assign($family, $leader, 18002),
         'Family contact must be eligible adult');
-    check((int) $db->query('SELECT COUNT(*) FROM philsms_leader_assignments')->fetchColumn() === 0,
-        'Rejected assignments leave no rows');
+    $count = $db->prepare(
+        'SELECT COUNT(*) FROM philsms_leader_assignments
+         WHERE approval_queue_id IN (?, ?)'
+    );
+    $count->execute([$individual, $family]);
+    check((int) $count->fetchColumn() === 0,
+        'Rejected assignments leave no rows for test approvals');
 
     $first = AssignmentService::assign($individual, $leader, 17001);
     check($first > 0, 'Approved individual assigned regardless of SMS delivery');
