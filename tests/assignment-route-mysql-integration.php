@@ -159,6 +159,9 @@ namespace {
     function rowCountFor(\PDO $db, string $table): int {
         return (int) $db->query('SELECT COUNT(*) FROM ' . $table)->fetchColumn();
     }
+    $queueBefore = $db->query(
+        'SELECT * FROM philsms_notification_queue ORDER BY id'
+    )->fetchAll(\PDO::FETCH_ASSOC);
     $assignmentsBefore = rowCountFor($db, 'philsms_leader_assignments');
     $activityBefore = rowCountFor($db, 'philsms_assignment_activity');
     attempt($handler, array_replace($base, ['csrf' => 'invalid']), 403, 'Invalid CSRF');
@@ -182,7 +185,16 @@ namespace {
     $created = attempt($handler, $base, 201, 'Individual assigned through route');
     $id = (int) ($created['assignment_id'] ?? 0);
     if ($id <= 0) { throw new \RuntimeException('Assignment ID missing.'); }
-    attempt($handler, $base, 409, 'Duplicate approval rejected');
+    $duplicate = attempt($handler, $base, 409, 'Duplicate approval rejected');
+    if (($duplicate['message'] ?? '') !== 'Approval event already assigned.' ||
+        ($duplicate['success'] ?? null) !== false) {
+        throw new \RuntimeException('Unexpected duplicate assignment response.');
+    }
+    if (rowCountFor($db, 'philsms_leader_assignments') !== $assignmentsBefore + 1 ||
+        rowCountFor($db, 'philsms_assignment_activity') !== $activityBefore + 1) {
+        throw new \RuntimeException('Duplicate request created additional records.');
+    }
+    echo "PASS: duplicate request creates no additional records\n";
     $familyCreated = attempt($handler, array_replace($base, [
         'approval_queue_id' => (string) $family,
         'contact_person_id' => '18111'
@@ -213,4 +225,11 @@ namespace {
         }
     }
     echo "PASS: transactional assignments and audit entries persisted\n";
+    $queueAfter = $db->query(
+        'SELECT * FROM philsms_notification_queue ORDER BY id'
+    )->fetchAll(\PDO::FETCH_ASSOC);
+    if ($queueBefore !== $queueAfter) {
+        throw new \RuntimeException('Assignment modified the SMS notification queue.');
+    }
+    echo "PASS: SMS notification queue remains unchanged\n";
 }

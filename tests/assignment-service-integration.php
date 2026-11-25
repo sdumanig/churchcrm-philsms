@@ -33,6 +33,16 @@ namespace {
     use ChurchCRM\Plugins\PhilSMS\AssignmentService;
     use Propel\Runtime\Propel;
 
+    // Reproduce the empty-string result observed in ChurchCRM staging.
+    final class EmptyStringPDOStatement extends \PDOStatement {
+        protected function __construct() {}
+
+        public function fetchColumn(int $column = 0): mixed {
+            $value = parent::fetchColumn($column);
+            return $value === false ? '' : $value;
+        }
+    }
+
     $dsn = getenv('PHILSMS_TEST_DSN') ?: '';
     if (getenv('PHILSMS_TEST_ALLOW_DDL') !== 'YES' ||
         getenv('PHILSMS_LIVE_SEND') === '1' ||
@@ -48,6 +58,14 @@ namespace {
         (string) $db->query('SELECT DATABASE()')->fetchColumn())) {
         throw new \RuntimeException('Not a scratch database');
     }
+    $db->setAttribute(\PDO::ATTR_STATEMENT_CLASS,
+        [EmptyStringPDOStatement::class, []]);
+
+    $emptyResult = $db->query('SELECT 1 WHERE 1 = 0')->fetchColumn();
+    if ($emptyResult !== '') {
+        throw new \RuntimeException('Empty-string simulation failed.');
+    }
+
     Propel::$connection = $db;
     foreach (['001_notification_queue', '004_leader_registry',
               '005_leader_assignments', '006_assignment_activity'] as $migration) {

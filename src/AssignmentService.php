@@ -42,10 +42,11 @@ final class AssignmentService
             }
 
             $existing = $db->prepare(
-                'SELECT id FROM philsms_leader_assignments WHERE approval_queue_id = ?'
+                'SELECT COUNT(*) FROM philsms_leader_assignments WHERE approval_queue_id = ?'
             );
             $existing->execute([$approvalQueueId]);
-            if ($existing->fetchColumn() !== false) {
+
+            if ((int) $existing->fetchColumn() > 0) {
                 throw new \RuntimeException('Approval event already assigned.');
             }
 

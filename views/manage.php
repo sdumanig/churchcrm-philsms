@@ -568,23 +568,6 @@ $live = ($liveSendingEnabled === true);
                         <?= htmlspecialchars((string) $assignmentOverviewError, ENT_QUOTES, 'UTF-8') ?>
                     </div>
                 <?php else: ?>
-                    <h5>Designate a leader</h5>
-                    <p class="text-muted">Enter the ChurchCRM person ID of a leader. Up to seven leaders may be active. Entering an inactive leader's ID reactivates that designation.</p>
-                    <form id="philsms-leader-designation-form" method="post"
-                          action="<?= $base ?>/plugins/philsms/leaders/designate">
-                        <input type="hidden" name="csrf"
-                               value="<?= htmlspecialchars((string) $_SESSION['philsms_csrf'], ENT_QUOTES, 'UTF-8') ?>">
-                        <div class="mb-3">
-                            <label class="form-label" for="philsms-leader-person-id">ChurchCRM person ID</label>
-                            <input class="form-control" id="philsms-leader-person-id"
-                                   name="person_id" type="number" min="1" step="1" required
-                                   inputmode="numeric">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Save leader designation (no SMS)</button>
-                        <div id="philsms-leader-designation-result" class="mt-3"
-                             role="status" aria-live="polite"></div>
-                    </form>
-                    <hr class="my-4">
                     <h5>Unassigned approval events</h5>
                     <?php if (empty($assignmentCandidates)): ?>
                         <p>No unassigned approval events are recorded.</p>
@@ -682,6 +665,23 @@ $live = ($liveSendingEnabled === true);
                             </table>
                         </div>
                     <?php endif; ?>
+                    <hr class="my-4">
+                    <h5>Designate a leader</h5>
+                    <p class="text-muted">Enter the ChurchCRM person ID of a leader. Up to seven leaders may be active. Entering an inactive leader's ID reactivates that designation.</p>
+                    <form id="philsms-leader-designation-form" method="post"
+                          action="<?= $base ?>/plugins/philsms/leaders/designate">
+                        <input type="hidden" name="csrf"
+                               value="<?= htmlspecialchars((string) $_SESSION['philsms_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="mb-3">
+                            <label class="form-label" for="philsms-leader-person-id">ChurchCRM person ID</label>
+                            <input class="form-control" id="philsms-leader-person-id"
+                                   name="person_id" type="number" min="1" step="1" required
+                                   inputmode="numeric">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save leader designation (no SMS)</button>
+                        <div id="philsms-leader-designation-result" class="mt-3"
+                             role="status" aria-live="polite"></div>
+                    </form>
                 <?php endif; ?>
             </div>
         </div>
